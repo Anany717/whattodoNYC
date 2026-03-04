@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime, time, timezone
+from typing import Optional
 
 from sqlalchemy import (
     JSON,
@@ -75,7 +78,7 @@ class Place(Base):
     __tablename__ = "places"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    google_place_id: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
+    google_place_id: Mapped[Optional[str]] = mapped_column(Text, unique=True, nullable=True)
     source: Mapped[PlaceSource] = mapped_column(
         Enum(PlaceSource, native_enum=False, values_callable=enum_values),
         nullable=False,
@@ -86,14 +89,16 @@ class Place(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    formatted_address: Mapped[str | None] = mapped_column(Text, nullable=True)
-    neighborhood: Mapped[str | None] = mapped_column(Text, nullable=True)
+    formatted_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    neighborhood: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     lat: Mapped[float] = mapped_column(nullable=False)
     lng: Mapped[float] = mapped_column(nullable=False)
-    price_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
-    website: Mapped[str | None] = mapped_column(Text, nullable=True)
-    managed_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    price_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    website: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    managed_by_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -119,8 +124,8 @@ class PlaceHour(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     place_id: Mapped[str] = mapped_column(String(36), ForeignKey("places.id"), nullable=False)
     day_of_week: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    open_time: Mapped[time | None] = mapped_column(Time, nullable=True)
-    close_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    open_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
+    close_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     is_closed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (UniqueConstraint("place_id", "day_of_week", name="uq_place_day"),)
@@ -135,10 +140,10 @@ class Review(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     place_id: Mapped[str] = mapped_column(String(36), ForeignKey("places.id"), nullable=False)
     rating_overall: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    rating_value: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    rating_vibe: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    rating_groupfit: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rating_value: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    rating_vibe: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    rating_groupfit: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     __table_args__ = (
@@ -197,7 +202,7 @@ class Promotion(Base):
     place_id: Mapped[str] = mapped_column(String(36), ForeignKey("places.id"), nullable=False)
     seller_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     boost_factor: Mapped[float] = mapped_column(Numeric(3, 2), nullable=False)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
