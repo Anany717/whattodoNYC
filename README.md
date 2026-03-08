@@ -14,31 +14,68 @@ Context-aware NYC discovery and decision platform.
 - `frontend/` Next.js UI (home, results, map, login/register)
 - `backend/sql/supabase_schema.sql` Supabase-compatible schema
 
-## Setup
-1. Copy env files:
+## Run Project (Exact Steps)
+Use 2 terminal windows: one for backend and one for frontend.
+
+### 1) One-time setup
 ```bash
+cd ~/Desktop/CAPSTONE
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
 ```
-2. Fill secrets/URLs in env files.
 
-## Run Backend
+### 2) Backend setup + run (Terminal A)
 ```bash
-cd backend
+cd ~/Desktop/CAPSTONE/backend
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
 pip install -r requirements-dev.txt
-uvicorn app.main:app --reload
+sed -i '' 's#^SQLALCHEMY_DATABASE_URL=.*#SQLALCHEMY_DATABASE_URL=sqlite:///./whattodo.db#' .env
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-- Swagger docs: `http://localhost:8000/docs`
 
-## Run Frontend
+Verify backend:
+- Open `http://127.0.0.1:8000/docs`
+- Or run:
 ```bash
-cd frontend
+curl http://127.0.0.1:8000/health
+```
+Expected response:
+```json
+{"status":"ok"}
+```
+
+### 3) Seed sample places (optional, recommended)
+```bash
+cd ~/Desktop/CAPSTONE/backend
+source .venv/bin/activate
+python -m scripts.seed
+```
+
+### 4) Frontend setup + run (Terminal B)
+```bash
+cd ~/Desktop/CAPSTONE/frontend
 npm install
 npm run dev
 ```
-- App: `http://localhost:3000`
+
+Open app:
+- `http://localhost:3000`
+
+### 5) Next time you run the project
+Backend:
+```bash
+cd ~/Desktop/CAPSTONE/backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Frontend:
+```bash
+cd ~/Desktop/CAPSTONE/frontend
+npm run dev
+```
 
 ## Apply Supabase Schema
 Run directly against your Supabase Postgres:
