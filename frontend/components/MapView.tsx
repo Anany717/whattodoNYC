@@ -46,7 +46,7 @@ export default function MapView() {
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
-      setError("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for map rendering.");
+      setError("Map preview is unavailable right now. Please try again later.");
       return;
     }
 

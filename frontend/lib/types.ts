@@ -1,3 +1,126 @@
+export type UserRole = "customer" | "reviewer" | "seller" | "admin";
+
+export type User = {
+  id: string;
+  full_name: string;
+  email: string;
+  role: UserRole;
+  created_at: string;
+};
+
+export type AuthTokenResponse = {
+  access_token: string;
+  token_type: "bearer";
+};
+
+export type Place = {
+  id: string;
+  google_place_id: string | null;
+  source: "google" | "internal";
+  place_type: "restaurant" | "event" | "activity";
+  name: string;
+  formatted_address: string | null;
+  neighborhood: string | null;
+  lat: number;
+  lng: number;
+  price_level: number | null;
+  phone: string | null;
+  website: string | null;
+  managed_by_user_id: string | null;
+};
+
+export type PlaceDetail = {
+  id: string;
+  name: string;
+  formatted_address: string | null;
+  neighborhood: string | null;
+  place_type: "restaurant" | "event" | "activity";
+  price_level: number | null;
+  phone: string | null;
+  website: string | null;
+  lat: number;
+  lng: number;
+  tags: string[];
+  average_rating: number | null;
+  authenticity_score: number;
+  review_count: number;
+};
+
+export type Review = {
+  id: string;
+  user_id: string;
+  place_id: string;
+  rating_overall: number;
+  rating_value: number | null;
+  rating_vibe: number | null;
+  rating_groupfit: number | null;
+  comment: string | null;
+  created_at: string;
+};
+
+export type UserReview = Review & {
+  place_name: string;
+};
+
+export type ReviewPayload = {
+  place_id: string;
+  rating_overall: number;
+  rating_value?: number;
+  rating_vibe?: number;
+  rating_groupfit?: number;
+  comment?: string;
+};
+
+export type ReviewUpdatePayload = {
+  rating_overall: number;
+  rating_value?: number;
+  rating_vibe?: number;
+  rating_groupfit?: number;
+  comment?: string;
+};
+
+export type AuthenticitySummary = {
+  place_id: string;
+  authentic_count: number;
+  touristy_count: number;
+  score: number;
+};
+
+export type Promotion = {
+  id: string;
+  place_id: string;
+  seller_user_id: string;
+  title: string;
+  description: string | null;
+  boost_factor: number;
+  start_at: string;
+  end_at: string;
+};
+
+export type PromotionCreatePayload = {
+  place_id: string;
+  title: string;
+  description?: string;
+  boost_factor: number;
+  start_at: string;
+  end_at: string;
+};
+
+export type SavedListItem = {
+  list_id: string;
+  place_id: string;
+  created_at: string;
+  place?: Place;
+};
+
+export type SavedList = {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  items: SavedListItem[];
+};
+
 export type RecommendationRequest = {
   keywords: string;
   budget: 1 | 2 | 3 | 4;
@@ -21,4 +144,8 @@ export type RecommendationItem = {
 
 export type RecommendationResponse = {
   results: RecommendationItem[];
+};
+
+export type PlaceSearchResponse = {
+  items: Place[];
 };

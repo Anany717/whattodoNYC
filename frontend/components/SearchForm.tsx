@@ -56,7 +56,7 @@ export default function SearchForm() {
 
   return (
     <form
-      className="card mx-auto mt-8 w-full max-w-3xl space-y-5 p-6 shadow-lift"
+      className="card mx-auto mt-8 w-full max-w-3xl space-y-5 p-6 shadow-sm"
       onSubmit={(event) => {
         event.preventDefault();
         router.push(`/results?${queryString}`);
@@ -72,7 +72,7 @@ export default function SearchForm() {
           value={form.keywords}
           onChange={(event) => update("keywords", event.target.value)}
           placeholder="romantic jazz rooftop"
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-800 outline-none ring-brand-500 transition focus:ring-2"
+          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-slate-900 transition focus:ring-2"
         />
       </div>
 
@@ -146,7 +146,7 @@ export default function SearchForm() {
         <button
           type="button"
           onClick={useLocation}
-          className="rounded-xl border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
         >
           {loadingGeo ? "Locating..." : "Use my location"}
         </button>
@@ -158,9 +158,9 @@ export default function SearchForm() {
 
       <button
         type="submit"
-        className="w-full rounded-xl bg-brand-700 px-4 py-3 font-semibold text-white transition hover:bg-brand-500"
+        className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-700"
       >
-        Find top picks
+        Get Recommendations
       </button>
     </form>
   );

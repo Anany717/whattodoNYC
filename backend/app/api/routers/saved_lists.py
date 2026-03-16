@@ -38,7 +38,7 @@ def add_saved_list_item(
     saved_list = db.scalar(
         select(SavedList)
         .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
-        .options(selectinload(SavedList.items))
+        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
     )
     if not saved_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved list not found")
@@ -57,7 +57,37 @@ def add_saved_list_item(
     saved_list = db.scalar(
         select(SavedList)
         .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
-        .options(selectinload(SavedList.items))
+        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
+    )
+    return SavedListOut.model_validate(saved_list)
+
+
+@router.delete("/saved-lists/{list_id}/items/{place_id}", response_model=SavedListOut)
+def remove_saved_list_item(
+    list_id: str,
+    place_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SavedListOut:
+    saved_list = db.scalar(
+        select(SavedList)
+        .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
+        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
+    )
+    if not saved_list:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved list not found")
+
+    item = db.scalar(
+        select(SavedListItem).where(SavedListItem.list_id == list_id, SavedListItem.place_id == place_id)
+    )
+    if item:
+        db.delete(item)
+        db.commit()
+
+    saved_list = db.scalar(
+        select(SavedList)
+        .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
+        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
     )
     return SavedListOut.model_validate(saved_list)
 
@@ -71,7 +101,7 @@ def get_my_saved_lists(
         db.scalars(
             select(SavedList)
             .where(SavedList.user_id == current_user.id)
-            .options(selectinload(SavedList.items))
+            .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
             .order_by(SavedList.created_at.desc())
         ).all()
     )

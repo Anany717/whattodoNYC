@@ -116,6 +116,7 @@ class Place(Base):
     authenticity_votes = relationship("AuthenticityVote", back_populates="place", cascade="all, delete-orphan")
     tags = relationship("PlaceTag", back_populates="place", cascade="all, delete-orphan")
     promotions = relationship("Promotion", back_populates="place", cascade="all, delete-orphan")
+    saved_list_items = relationship("SavedListItem", back_populates="place", cascade="all, delete-orphan")
 
 
 class PlaceHour(Base):
@@ -247,3 +248,4 @@ class SavedListItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     saved_list = relationship("SavedList", back_populates="items")
+    place = relationship("Place", back_populates="saved_list_items")

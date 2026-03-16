@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
+import Navbar from "@/components/Navbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,16 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
-          <Link href="/" className="font-display text-2xl font-bold text-brand-700">
-            WhatToDo NYC
-          </Link>
-          <nav className="flex gap-3 text-sm font-semibold text-slate-700">
-            <Link href="/results">Results</Link>
-            <Link href="/map">Map</Link>
-            <Link href="/login">Login</Link>
-          </nav>
-        </header>
+        <Navbar />
         {children}
       </body>
     </html>

@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_roles
 from app.core.database import get_db
-from app.models import Place, PlaceSource, PlaceTag, Promotion, Review, User, UserRole
-from app.schemas import PlaceCreate, PlaceOut, PlaceSearchOut, PromotionOut, ReviewOut
+from app.models import AuthenticityLabel, Place, PlaceSource, PlaceTag, Promotion, Review, User, UserRole
+from app.schemas import PlaceCreate, PlaceDetailOut, PlaceOut, PlaceSearchOut, PromotionOut, ReviewOut
 from app.utils.geo import haversine_km
 
 router = APIRouter()
@@ -61,12 +61,52 @@ def search_places(
     return PlaceSearchOut(items=[PlaceOut.model_validate(item) for item in filtered])
 
 
-@router.get("/places/{place_id}", response_model=PlaceOut)
-def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceOut:
-    place = db.get(Place, place_id)
+@router.get("/places/{place_id}", response_model=PlaceDetailOut)
+def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceDetailOut:
+    place = db.scalar(
+        select(Place)
+        .where(Place.id == place_id)
+        .options(
+            selectinload(Place.tags).selectinload(PlaceTag.tag),
+            selectinload(Place.reviews),
+            selectinload(Place.authenticity_votes),
+        )
+    )
     if not place:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Place not found")
-    return PlaceOut.model_validate(place)
+
+    tags = [place_tag.tag.name for place_tag in place.tags if place_tag.tag]
+    review_count = len(place.reviews)
+    average_rating = (
+        round(sum(review.rating_overall for review in place.reviews) / review_count, 2)
+        if review_count
+        else None
+    )
+    authentic_count = sum(
+        1 for vote in place.authenticity_votes if vote.label == AuthenticityLabel.authentic
+    )
+    touristy_count = sum(
+        1 for vote in place.authenticity_votes if vote.label == AuthenticityLabel.touristy
+    )
+    total_votes = authentic_count + touristy_count
+    authenticity_score = round(authentic_count / total_votes, 3) if total_votes else 0.5
+
+    return PlaceDetailOut(
+        id=place.id,
+        name=place.name,
+        formatted_address=place.formatted_address,
+        neighborhood=place.neighborhood,
+        place_type=place.place_type,
+        price_level=place.price_level,
+        phone=place.phone,
+        website=place.website,
+        lat=place.lat,
+        lng=place.lng,
+        tags=tags,
+        average_rating=average_rating,
+        authenticity_score=authenticity_score,
+        review_count=review_count,
+    )
 
 
 @router.post("/places", response_model=PlaceOut)

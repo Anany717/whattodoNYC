@@ -35,6 +35,11 @@ class UserOut(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
 class PlaceCreate(BaseModel):
     place_type: PlaceType
     name: str
@@ -65,12 +70,37 @@ class PlaceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PlaceDetailOut(BaseModel):
+    id: str
+    name: str
+    formatted_address: str | None
+    neighborhood: str | None
+    place_type: PlaceType
+    price_level: int | None
+    phone: str | None
+    website: str | None
+    lat: float
+    lng: float
+    tags: list[str] = Field(default_factory=list)
+    average_rating: float | None = None
+    authenticity_score: float = 0.5
+    review_count: int = 0
+
+
 class PlaceSearchOut(BaseModel):
     items: list[PlaceOut]
 
 
 class ReviewCreate(BaseModel):
     place_id: str
+    rating_overall: int = Field(ge=1, le=5)
+    rating_value: int | None = Field(default=None, ge=1, le=5)
+    rating_vibe: int | None = Field(default=None, ge=1, le=5)
+    rating_groupfit: int | None = Field(default=None, ge=1, le=5)
+    comment: str | None = None
+
+
+class ReviewUpdate(BaseModel):
     rating_overall: int = Field(ge=1, le=5)
     rating_value: int | None = Field(default=None, ge=1, le=5)
     rating_vibe: int | None = Field(default=None, ge=1, le=5)
@@ -90,6 +120,10 @@ class ReviewOut(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserReviewOut(ReviewOut):
+    place_name: str
 
 
 class AuthenticityVoteIn(BaseModel):
@@ -146,6 +180,7 @@ class SavedListItemOut(BaseModel):
     list_id: str
     place_id: str
     created_at: datetime
+    place: PlaceOut | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

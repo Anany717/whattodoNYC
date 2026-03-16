@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_roles
 from app.core.database import get_db
 from app.models import Place, Review, User, UserRole
-from app.schemas import ReviewCreate, ReviewOut
+from app.schemas import ReviewCreate, ReviewOut, ReviewUpdate
 
 router = APIRouter()
 
@@ -41,6 +41,31 @@ def create_or_update_review(
         )
         db.add(review)
 
+    db.commit()
+    db.refresh(review)
+    return ReviewOut.model_validate(review)
+
+
+@router.put("/reviews/{review_id}", response_model=ReviewOut)
+def update_review(
+    review_id: str,
+    payload: ReviewUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.customer, UserRole.reviewer)),
+) -> ReviewOut:
+    review = db.get(Review, review_id)
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
+    if review.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot edit another user's review")
+
+    review.rating_overall = payload.rating_overall
+    review.rating_value = payload.rating_value
+    review.rating_vibe = payload.rating_vibe
+    review.rating_groupfit = payload.rating_groupfit
+    review.comment = payload.comment
+
+    db.add(review)
     db.commit()
     db.refresh(review)
     return ReviewOut.model_validate(review)

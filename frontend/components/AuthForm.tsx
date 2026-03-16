@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { authRequest } from "@/lib/api";
+import { login, register } from "@/lib/api";
+import { setToken } from "@/lib/auth";
 
 type Mode = "login" | "register";
 
@@ -12,6 +14,7 @@ type Props = {
 };
 
 export default function AuthForm({ mode }: Props) {
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,7 +26,7 @@ export default function AuthForm({ mode }: Props) {
 
   return (
     <form
-      className="card mx-auto mt-10 w-full max-w-md space-y-4 p-6"
+      className="card mx-auto mt-10 w-full max-w-md space-y-4 p-6 shadow-sm"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
@@ -31,16 +34,17 @@ export default function AuthForm({ mode }: Props) {
 
         try {
           const body = isRegister
-            ? await authRequest("/auth/register", {
+            ? await register({
                 full_name: fullName,
                 email,
                 password,
                 role
               })
-            : await authRequest("/auth/login", { email, password });
+            : await login({ email, password });
 
-          localStorage.setItem("whattodo_token", body.access_token);
-          setMessage(`Success. Token saved for ${mode}.`);
+          setToken(body.access_token);
+          setMessage(`Success. You're now signed in.`);
+          router.push("/dashboard");
         } catch (err) {
           setError((err as Error).message);
         }
@@ -90,7 +94,7 @@ export default function AuthForm({ mode }: Props) {
         </select>
       ) : null}
 
-      <button className="w-full rounded-xl bg-brand-700 px-4 py-3 font-semibold text-white hover:bg-brand-500">
+      <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-700">
         {isRegister ? "Register" : "Login"}
       </button>
 
@@ -99,7 +103,7 @@ export default function AuthForm({ mode }: Props) {
 
       <p className="text-sm text-slate-600">
         {isRegister ? "Already have an account?" : "Need an account?"} {" "}
-        <Link href={isRegister ? "/login" : "/register"} className="font-semibold text-brand-700">
+        <Link href={isRegister ? "/login" : "/register"} className="font-semibold text-slate-900">
           {isRegister ? "Login" : "Register"}
         </Link>
       </p>

@@ -3,14 +3,12 @@ import SearchForm from "@/components/SearchForm";
 export default function HomePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 pb-16">
-      <section className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/70 px-6 py-10 shadow-lift sm:px-10">
-        <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-accent-500/20 blur-2xl" />
+      <section className="rounded-3xl border border-slate-200 bg-white px-6 py-10 shadow-sm sm:px-10">
         <h1 className="font-display text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
-          Decide faster in NYC,
-          <span className="text-brand-700"> with context-aware picks.</span>
+          Find the right NYC spot faster.
         </h1>
         <p className="mt-3 max-w-2xl text-slate-700">
-          Enter your mood, budget, group size, and location. We rank the best nearby options with concise why-explanations.
+          Search by vibe, budget, group size, and location. Get ranked recommendations with quick, clear reasons.
         </p>
       </section>
 
