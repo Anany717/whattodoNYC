@@ -26,7 +26,7 @@ export default function AuthForm({ mode }: Props) {
 
   return (
     <form
-      className="card mx-auto mt-10 w-full max-w-md space-y-4 p-6 shadow-sm"
+      className="card mx-auto mt-10 w-full max-w-md space-y-4 p-6"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
@@ -60,7 +60,7 @@ export default function AuthForm({ mode }: Props) {
           onChange={(event) => setFullName(event.target.value)}
           placeholder="Full name"
           required
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+          className="field-input"
         />
       ) : null}
 
@@ -70,7 +70,7 @@ export default function AuthForm({ mode }: Props) {
         onChange={(event) => setEmail(event.target.value)}
         placeholder="Email"
         required
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+        className="field-input"
       />
 
       <input
@@ -79,14 +79,14 @@ export default function AuthForm({ mode }: Props) {
         onChange={(event) => setPassword(event.target.value)}
         placeholder="Password"
         required
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+        className="field-input"
       />
 
       {isRegister ? (
         <select
           value={role}
           onChange={(event) => setRole(event.target.value)}
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3"
+          className="field-select"
         >
           <option value="customer">Customer</option>
           <option value="reviewer">Reviewer</option>
@@ -94,7 +94,7 @@ export default function AuthForm({ mode }: Props) {
         </select>
       ) : null}
 
-      <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-700">
+      <button className="btn-primary w-full">
         {isRegister ? "Register" : "Login"}
       </button>
 
@@ -103,7 +103,7 @@ export default function AuthForm({ mode }: Props) {
 
       <p className="text-sm text-slate-600">
         {isRegister ? "Already have an account?" : "Need an account?"} {" "}
-        <Link href={isRegister ? "/login" : "/register"} className="font-semibold text-slate-900">
+        <Link href={isRegister ? "/login" : "/register"} className="font-semibold text-brand-700">
           {isRegister ? "Login" : "Register"}
         </Link>
       </p>

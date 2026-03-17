@@ -56,7 +56,7 @@ export default function SearchForm() {
 
   return (
     <form
-      className="card mx-auto mt-8 w-full max-w-3xl space-y-5 p-6 shadow-sm"
+      className="card mx-auto mt-8 w-full max-w-3xl space-y-5 p-6"
       onSubmit={(event) => {
         event.preventDefault();
         router.push(`/results?${queryString}`);
@@ -72,7 +72,7 @@ export default function SearchForm() {
           value={form.keywords}
           onChange={(event) => update("keywords", event.target.value)}
           placeholder="romantic jazz rooftop"
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 outline-none ring-slate-900 transition focus:ring-2"
+          className="field-input"
         />
       </div>
 
@@ -85,7 +85,7 @@ export default function SearchForm() {
             id="budget"
             value={form.budget}
             onChange={(event) => update("budget", Number(event.target.value) as 1 | 2 | 3 | 4)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3"
+            className="field-select"
           >
             <option value={1}>$</option>
             <option value={2}>$$</option>
@@ -104,7 +104,7 @@ export default function SearchForm() {
             min={1}
             value={form.group_size}
             onChange={(event) => update("group_size", Number(event.target.value))}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3"
+            className="field-input"
           />
         </div>
 
@@ -119,7 +119,7 @@ export default function SearchForm() {
             step={0.5}
             value={form.radius_km}
             onChange={(event) => update("radius_km", Number(event.target.value))}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3"
+            className="field-input"
           />
         </div>
 
@@ -133,7 +133,7 @@ export default function SearchForm() {
             onChange={(event) =>
               update("preference", event.target.value as "indoor" | "outdoor" | "either")
             }
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3"
+            className="field-select"
           >
             <option value="either">Either</option>
             <option value="indoor">Indoor</option>
@@ -146,7 +146,7 @@ export default function SearchForm() {
         <button
           type="button"
           onClick={useLocation}
-          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          className="btn-secondary px-4 py-2 text-sm"
         >
           {loadingGeo ? "Locating..." : "Use my location"}
         </button>
@@ -158,7 +158,7 @@ export default function SearchForm() {
 
       <button
         type="submit"
-        className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-700"
+        className="btn-primary w-full"
       >
         Get Recommendations
       </button>

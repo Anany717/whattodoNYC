@@ -4,13 +4,45 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: "IBM Plex Sans", sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
-  min-height: 100vh;
+:root {
+  --bg-grad-start: #dbf5f2;
+  --bg-grad-mid: #f8ebc7;
+  --bg-grad-end: #f8fbfd;
 }
 
-.card {
-  @apply rounded-2xl border border-slate-200 bg-white;
+body {
+  font-family: "IBM Plex Sans", sans-serif;
+  background:
+    radial-gradient(circle at 12% 12%, var(--bg-grad-start), transparent 34%),
+    radial-gradient(circle at 88% 4%, var(--bg-grad-mid), transparent 26%),
+    linear-gradient(180deg, #fbfdfd 0%, var(--bg-grad-end) 100%);
+  color: #1f2937;
+  min-height: 100vh;
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(15, 118, 110, 0.18);
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/70 bg-white/80 shadow-lift backdrop-blur-md;
+  }
+
+  .field-input {
+    @apply w-full rounded-xl border border-slate-200/90 bg-white/90 px-4 py-3 text-slate-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+
+  .field-select {
+    @apply w-full rounded-xl border border-slate-200/90 bg-white/90 px-4 py-3 text-slate-800 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-brand-700 px-4 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-brand-500 hover:shadow-lift;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-brand-100 bg-white/80 px-4 py-3 font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50;
+  }
 }

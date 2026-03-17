@@ -36,7 +36,7 @@ export default function ReviewForm({ initialValues, submitLabel = "Save Review",
 
   return (
     <form
-      className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4"
+      className="card space-y-3 p-4"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
@@ -66,7 +66,7 @@ export default function ReviewForm({ initialValues, submitLabel = "Save Review",
               required={key === "rating_overall"}
               value={values[key as keyof ReviewValues] ?? ""}
               onChange={(event) => setField(key as keyof ReviewValues, event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="field-input mt-1"
             />
           </label>
         ))}
@@ -78,7 +78,7 @@ export default function ReviewForm({ initialValues, submitLabel = "Save Review",
           value={values.comment || ""}
           onChange={(event) => setField("comment", event.target.value)}
           rows={3}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+          className="field-input mt-1"
           placeholder="Share your experience"
         />
       </label>
@@ -87,7 +87,7 @@ export default function ReviewForm({ initialValues, submitLabel = "Save Review",
 
       <button
         disabled={submitting}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        className="btn-primary disabled:opacity-60"
       >
         {submitting ? "Saving..." : submitLabel}
       </button>

@@ -13,16 +13,16 @@ function metricLabel(label: string, value: number | null) {
 export default function ReviewCard({ review, canEdit, onEdit }: Props) {
   const placeName = "place_name" in review ? review.place_name : null;
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4">
+    <article className="card p-4">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div>
-          {placeName ? <p className="text-sm font-semibold text-slate-800">{placeName}</p> : null}
+          {placeName ? <p className="text-sm font-semibold text-brand-700">{placeName}</p> : null}
           <p className="text-sm font-semibold text-slate-900">Overall: {review.rating_overall}/5</p>
           <p className="text-xs text-slate-500">{new Date(review.created_at).toLocaleString()}</p>
         </div>
         {canEdit && onEdit ? (
           <button
-            className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            className="btn-secondary px-2 py-1 text-xs"
             onClick={() => onEdit(review)}
           >
             Edit

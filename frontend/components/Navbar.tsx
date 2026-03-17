@@ -12,7 +12,9 @@ function NavLink({ href, label, active }: { href: string; label: string; active:
     <Link
       href={href}
       className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-        active ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+        active
+          ? "bg-brand-700 text-white shadow-lift"
+          : "text-slate-700 hover:bg-brand-50 hover:text-brand-700"
       }`}
     >
       {label}
@@ -65,10 +67,10 @@ export default function Navbar() {
   }, [user]);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-white/60 bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-2xl font-bold tracking-tight text-slate-900">
-          WhatToDo NYC
+        <Link href="/" className="font-display text-2xl font-bold tracking-tight text-slate-900">
+          WhatToDo <span className="text-brand-700">NYC</span>
         </Link>
 
         <nav className="flex flex-wrap items-center gap-2">
@@ -83,7 +85,7 @@ export default function Navbar() {
             </>
           ) : (
             <button
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-lg border border-brand-100 bg-white/75 px-3 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-50"
               onClick={() => {
                 clearToken();
                 router.push("/login");

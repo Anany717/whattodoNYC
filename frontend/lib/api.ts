@@ -2,6 +2,7 @@ import type {
   AuthenticitySummary,
   AuthTokenResponse,
   Place,
+  PlaceCreatePayload,
   PlaceDetail,
   PlaceSearchResponse,
   Promotion,
@@ -121,6 +122,14 @@ export function searchPlaces(params: {
 
 export function getPlace(placeId: string) {
   return request<PlaceDetail>(`/places/${placeId}`);
+}
+
+export function createPlace(token: string, payload: PlaceCreatePayload) {
+  return request<Place>("/places", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload)
+  });
 }
 
 export function getPlaceReviews(placeId: string) {

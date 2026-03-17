@@ -1,4 +1,5 @@
 export type UserRole = "customer" | "reviewer" | "seller" | "admin";
+export type PlaceType = "restaurant" | "event" | "activity";
 
 export type User = {
   id: string;
@@ -17,7 +18,7 @@ export type Place = {
   id: string;
   google_place_id: string | null;
   source: "google" | "internal";
-  place_type: "restaurant" | "event" | "activity";
+  place_type: PlaceType;
   name: string;
   formatted_address: string | null;
   neighborhood: string | null;
@@ -34,7 +35,7 @@ export type PlaceDetail = {
   name: string;
   formatted_address: string | null;
   neighborhood: string | null;
-  place_type: "restaurant" | "event" | "activity";
+  place_type: PlaceType;
   price_level: number | null;
   phone: string | null;
   website: string | null;
@@ -104,6 +105,18 @@ export type PromotionCreatePayload = {
   boost_factor: number;
   start_at: string;
   end_at: string;
+};
+
+export type PlaceCreatePayload = {
+  place_type: PlaceType;
+  name: string;
+  formatted_address?: string;
+  neighborhood?: string;
+  lat: number;
+  lng: number;
+  price_level?: number | null;
+  phone?: string;
+  website?: string;
 };
 
 export type SavedListItem = {

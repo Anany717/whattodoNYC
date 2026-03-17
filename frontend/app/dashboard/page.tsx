@@ -43,7 +43,7 @@ export default function DashboardPage() {
   return (
     <ProtectedRoute>
       <main className="mx-auto max-w-6xl px-4 py-8">
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
+        <h1 className="font-display text-3xl font-bold text-slate-900">Dashboard</h1>
         <p className="mt-2 text-sm text-slate-600">Welcome back. Use this dashboard to jump into your role-specific tools.</p>
 
         <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -67,22 +67,22 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+        <section className="card mt-6 p-5">
           <h2 className="text-lg font-semibold text-slate-900">Quick links</h2>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/profile" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+            <Link href="/profile" className="btn-secondary px-3 py-2 text-sm">
               Profile
             </Link>
-            <Link href="/saved-lists" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+            <Link href="/saved-lists" className="btn-secondary px-3 py-2 text-sm">
               Saved Lists
             </Link>
             {user?.role === "seller" ? (
-              <Link href="/seller/dashboard" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              <Link href="/seller/dashboard" className="btn-secondary px-3 py-2 text-sm">
                 Seller Dashboard
               </Link>
             ) : null}
             {user?.role === "admin" ? (
-              <Link href="/admin/dashboard" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              <Link href="/admin/dashboard" className="btn-secondary px-3 py-2 text-sm">
                 Admin Dashboard
               </Link>
             ) : null}

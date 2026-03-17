@@ -69,7 +69,7 @@ export default function ProfilePage() {
         {user ? <ProfileHeader user={user} /> : null}
 
         {user?.role === "reviewer" ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <section className="card p-4">
             <h2 className="text-lg font-semibold text-slate-900">Reviewer activity</h2>
             <p className="mt-1 text-sm text-slate-600">
               You have posted {reviews.length} review{reviews.length === 1 ? "" : "s"}. Keep improving recommendation quality.
@@ -78,27 +78,27 @@ export default function ProfilePage() {
         ) : null}
 
         {user?.role === "seller" ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <section className="card p-4">
             <h2 className="text-lg font-semibold text-slate-900">Seller tools</h2>
             <p className="mt-1 text-sm text-slate-600">Manage your places and promotions from the seller dashboard.</p>
             <Link
               href="/seller/dashboard"
-              className="mt-3 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              className="btn-primary mt-3 px-4 py-2 text-sm"
             >
               Open seller dashboard
             </Link>
           </section>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-slate-900">Account settings</h2>
+        <section className="card p-6">
+          <h2 className="font-display text-xl font-semibold text-slate-900">Account settings</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">
               Full name
               <input
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="field-input mt-1"
               />
             </label>
             <label className="text-sm font-medium text-slate-700">
@@ -108,20 +108,20 @@ export default function ProfilePage() {
                 value={passwordPlaceholder}
                 onChange={(event) => setPasswordPlaceholder(event.target.value)}
                 placeholder="Enter new password"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="field-input mt-1"
               />
             </label>
           </div>
           <button
             onClick={onUpdate}
-            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            className="btn-primary mt-4 px-4 py-2 text-sm"
           >
             Save profile updates
           </button>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-slate-900">Recent reviews</h2>
+        <section className="card p-6">
+          <h2 className="font-display text-xl font-semibold text-slate-900">Recent reviews</h2>
           <div className="mt-4 space-y-3">
             {loading ? <p className="text-sm text-slate-600">Loading...</p> : null}
             {!loading && reviews.length === 0 ? (
@@ -133,8 +133,8 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-slate-900">Saved lists</h2>
+        <section className="card p-6">
+          <h2 className="font-display text-xl font-semibold text-slate-900">Saved lists</h2>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {savedLists.length ? (
               savedLists.map((list) => <SavedListCard key={list.id} list={list} />)

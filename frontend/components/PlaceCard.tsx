@@ -17,16 +17,16 @@ export default function PlaceCard({ place, subtitle }: Props) {
   const placeLinkId = "place_id" in place ? place.place_id : place.id;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="card p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">{place.name}</h3>
+          <h3 className="font-display text-lg font-semibold text-slate-900">{place.name}</h3>
           {hasAddress && place.formatted_address ? (
             <p className="mt-1 text-sm text-slate-600">{place.formatted_address}</p>
           ) : null}
           {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
           {hasType ? (
-            <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">{place.place_type}</p>
+            <p className="mt-2 text-xs uppercase tracking-wide text-brand-700">{place.place_type}</p>
           ) : null}
         </div>
 
@@ -41,7 +41,7 @@ export default function PlaceCard({ place, subtitle }: Props) {
       <div className="mt-4">
         <Link
           href={`/places/${placeLinkId}`}
-          className="inline-flex rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          className="btn-secondary px-3 py-2 text-sm"
         >
           View details
         </Link>

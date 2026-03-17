@@ -5,9 +5,10 @@ type Props = {
 
 export default function SellerStatsCard({ label, value }: Props) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+    <article className="card relative overflow-hidden p-4">
+      <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-brand-100/70 blur-2xl" />
+      <p className="relative text-xs uppercase tracking-wide text-brand-700">{label}</p>
+      <p className="relative mt-2 font-display text-3xl font-bold text-slate-900">{value}</p>
     </article>
   );
 }

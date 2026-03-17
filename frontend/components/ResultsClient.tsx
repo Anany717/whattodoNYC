@@ -61,7 +61,7 @@ export default function ResultsClient() {
         <h1 className="font-display text-3xl font-bold text-slate-900">Top NYC Picks</h1>
         <Link
           href="/map"
-          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          className="btn-primary px-4 py-2 text-sm"
         >
           Open map view
         </Link>

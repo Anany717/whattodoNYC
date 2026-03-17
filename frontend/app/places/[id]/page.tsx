@@ -133,8 +133,8 @@ export default function PlaceDetailPage() {
   return (
     <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[2fr,1fr]">
       <section className="space-y-6">
-        <article className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h1 className="text-3xl font-bold text-slate-900">{place.name}</h1>
+        <article className="card p-6">
+          <h1 className="font-display text-3xl font-bold text-slate-900">{place.name}</h1>
           <p className="mt-2 text-sm text-slate-600">{place.formatted_address || "Address unavailable"}</p>
 
           <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
@@ -162,7 +162,7 @@ export default function PlaceDetailPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             {place.tags.length ? (
               place.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                <span key={tag} className="rounded-full border border-brand-100 bg-brand-50/80 px-3 py-1 text-xs text-brand-700">
                   {tag}
                 </span>
               ))
@@ -172,8 +172,8 @@ export default function PlaceDetailPage() {
           </div>
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-xl font-semibold text-slate-900">Reviews</h2>
+        <article className="card p-6">
+          <h2 className="font-display text-xl font-semibold text-slate-900">Reviews</h2>
           <div className="mt-4 space-y-3">
             {reviews.length ? (
               reviews.map((review) => (
@@ -192,11 +192,11 @@ export default function PlaceDetailPage() {
       </section>
 
       <aside className="space-y-6">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="text-lg font-semibold text-slate-900">Actions</h3>
+        <article className="card p-5">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Actions</h3>
           <div className="mt-4 space-y-2">
             <button
-              className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              className="btn-primary w-full px-4 py-2 text-sm"
               onClick={() => {
                 if (!user) {
                   router.push("/login");
@@ -209,7 +209,7 @@ export default function PlaceDetailPage() {
             </button>
 
             <button
-              className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              className="btn-secondary w-full px-4 py-2 text-sm"
               onClick={savePlace}
             >
               Save place
@@ -217,13 +217,13 @@ export default function PlaceDetailPage() {
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className="btn-secondary px-4 py-2 text-sm"
                 onClick={() => castVote("authentic")}
               >
                 Vote authentic
               </button>
               <button
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className="btn-secondary px-4 py-2 text-sm"
                 onClick={() => castVote("touristy")}
               >
                 Vote touristy
@@ -252,12 +252,12 @@ export default function PlaceDetailPage() {
           ) : null}
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="text-lg font-semibold text-slate-900">Active Promotions</h3>
+        <article className="card p-5">
+          <h3 className="font-display text-lg font-semibold text-slate-900">Active Promotions</h3>
           <div className="mt-3 space-y-2">
             {promotions.length ? (
               promotions.map((promo) => (
-                <div key={promo.id} className="rounded-xl border border-slate-200 p-3">
+                <div key={promo.id} className="rounded-xl border border-brand-100/80 bg-white/70 p-3">
                   <p className="text-sm font-semibold text-slate-800">{promo.title}</p>
                   <p className="text-xs text-slate-600">{promo.description || "No description"}</p>
                   <p className="mt-1 text-xs text-slate-500">
