@@ -158,9 +158,11 @@ def _keyword_relevance(place: Place, keywords: str) -> float:
     if not tokens:
         return 0.0
 
-    searchable = [place.name.lower()]
+    searchable = [place.name.lower(), place.place_type.value.lower()]
     if place.neighborhood:
         searchable.append(place.neighborhood.lower())
+    if place.formatted_address:
+        searchable.append(place.formatted_address.lower())
     for place_tag in place.tags:
         if place_tag.tag:
             searchable.append(place_tag.tag.name.lower())

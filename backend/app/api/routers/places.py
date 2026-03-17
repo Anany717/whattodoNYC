@@ -34,31 +34,40 @@ def search_places(
         ).all()
     )
 
-    filtered: list[Place] = []
-    now = datetime.now(timezone.utc)
-    today = now.weekday() % 7
+    ranked: list[tuple[Place, float, float]] = []
+    today = datetime.now(timezone.utc).weekday() % 7
+    normalized_tag = tag.lower().strip() if tag else None
 
     for place in places:
-        if query and query.lower() not in place.name.lower():
+        tag_names = _tag_names(place)
+        relevance = _search_relevance(place, query, tag_names)
+        if query and relevance <= 0:
             continue
         if price_level and place.price_level and place.price_level != price_level:
             continue
-        if tag:
-            tags = {pt.tag.name.lower() for pt in place.tags if pt.tag}
-            if tag.lower() not in tags:
-                continue
-        if lat is not None and lng is not None and radius_km is not None:
-            distance = haversine_km(lat, lng, place.lat, place.lng)
-            if distance > radius_km:
+        if normalized_tag and not any(normalized_tag in tag_name for tag_name in tag_names):
+            continue
+
+        distance_km = float("inf")
+        if lat is not None and lng is not None:
+            distance_km = haversine_km(lat, lng, place.lat, place.lng)
+            if radius_km is not None and distance_km > radius_km:
                 continue
         if open_now is True and place.hours:
             day_rows = [hour for hour in place.hours if hour.day_of_week == today]
             if day_rows and all(row.is_closed for row in day_rows):
                 continue
 
-        filtered.append(place)
+        ranked.append((place, relevance, distance_km))
 
-    return PlaceSearchOut(items=[PlaceOut.model_validate(item) for item in filtered])
+    if query:
+        ranked.sort(key=lambda item: (-item[1], item[2], item[0].name.lower()))
+    elif lat is not None and lng is not None:
+        ranked.sort(key=lambda item: (item[2], item[0].name.lower()))
+    else:
+        ranked.sort(key=lambda item: item[0].name.lower())
+
+    return PlaceSearchOut(items=[PlaceOut.model_validate(place) for place, _, _ in ranked])
 
 
 @router.get("/places/{place_id}", response_model=PlaceDetailOut)
@@ -174,3 +183,42 @@ def place_promotions(place_id: str, db: Session = Depends(get_db)) -> list[Promo
         ).all()
     )
     return [PromotionOut.model_validate(item) for item in promotions]
+
+
+def _tag_names(place: Place) -> list[str]:
+    return [place_tag.tag.name.lower() for place_tag in place.tags if place_tag.tag]
+
+
+def _search_relevance(place: Place, query: str | None, tag_names: list[str]) -> float:
+    if not query or not query.strip():
+        return 0.0
+
+    normalized_query = query.strip().lower()
+    tokens = [token for token in normalized_query.replace(",", " ").split() if token]
+
+    name = place.name.lower()
+    neighborhood = (place.neighborhood or "").lower()
+    address = (place.formatted_address or "").lower()
+    place_type = place.place_type.value.lower()
+
+    score = 0.0
+    if normalized_query in name:
+        score += 5.0
+    if normalized_query in neighborhood or normalized_query in address:
+        score += 2.5
+    if normalized_query == place_type:
+        score += 2.0
+
+    for token in tokens:
+        if token in name:
+            score += 2.2
+        if token in neighborhood:
+            score += 1.5
+        if token in address:
+            score += 1.2
+        if token in place_type:
+            score += 1.3
+        if any(token in tag_name for tag_name in tag_names):
+            score += 1.8
+
+    return score / max(1, len(tokens))
