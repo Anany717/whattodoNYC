@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+import PlaceCard from "@/components/PlaceCard";
 import ResultCard from "@/components/ResultCard";
-import { fetchRecommendations } from "@/lib/api";
-import type { RecommendationItem, RecommendationRequest } from "@/lib/types";
+import SaveActions from "@/components/SaveActions";
+import { fetchRecommendations, searchPlaces } from "@/lib/api";
+import type { Place, RecommendationItem, RecommendationRequest } from "@/lib/types";
 
 function toRequest(params: URLSearchParams): RecommendationRequest {
   return {
@@ -24,26 +26,50 @@ export default function ResultsClient() {
   const params = useSearchParams();
   const request = useMemo(() => toRequest(params), [params]);
   const [results, setResults] = useState<RecommendationItem[]>([]);
+  const [placeMatches, setPlaceMatches] = useState<Place[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     setError(null);
+    setSearchError(null);
 
-    fetchRecommendations(request)
-      .then((response) => {
+    Promise.allSettled([
+      fetchRecommendations(request),
+      searchPlaces({
+        query: request.keywords,
+        lat: request.lat,
+        lng: request.lng,
+        radius_km: request.radius_km,
+        price_level: request.budget,
+      }),
+    ])
+      .then(([recommendationResult, searchResult]) => {
         if (!mounted) return;
-        setResults(response.results);
-        localStorage.setItem(
-          "whattodo_results",
-          JSON.stringify({ generatedAt: new Date().toISOString(), request, results: response.results })
-        );
-      })
-      .catch((err: Error) => {
-        if (!mounted) return;
-        setError(err.message);
+
+        if (recommendationResult.status === "fulfilled") {
+          setResults(recommendationResult.value.results);
+          localStorage.setItem(
+            "whattodo_results",
+            JSON.stringify({ generatedAt: new Date().toISOString(), request, results: recommendationResult.value.results })
+          );
+        } else {
+          setError(recommendationResult.reason instanceof Error ? recommendationResult.reason.message : "Could not load recommendations.");
+        }
+
+        if (searchResult.status === "fulfilled") {
+          const recommendationIds = new Set(
+            recommendationResult.status === "fulfilled"
+              ? recommendationResult.value.results.map((item) => item.place_id)
+              : []
+          );
+          setPlaceMatches(searchResult.value.items.filter((place) => !recommendationIds.has(place.id)).slice(0, 8));
+        } else {
+          setSearchError(searchResult.reason instanceof Error ? searchResult.reason.message : "Could not load place matches.");
+        }
       })
       .finally(() => {
         if (!mounted) return;
@@ -75,6 +101,31 @@ export default function ResultsClient() {
           <ResultCard key={item.place_id} item={item} rank={index + 1} />
         ))}
       </div>
+
+      <section className="mt-10">
+        <div className="mb-4">
+          <h2 className="font-display text-2xl font-semibold text-slate-900">More places matching your filters</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            This search combines our local catalog with Google-backed cached matches when nearby results are limited.
+          </p>
+        </div>
+
+        {searchError ? <p className="mb-3 text-sm text-red-600">{searchError}</p> : null}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {placeMatches.length ? (
+            placeMatches.map((place) => (
+              <PlaceCard
+                key={place.id}
+                place={place}
+                actions={<SaveActions placeId={place.id} />}
+              />
+            ))
+          ) : (
+            <p className="text-sm text-slate-600">No extra matches beyond the ranked recommendations yet.</p>
+          )}
+        </div>
+      </section>
     </section>
   );
 }

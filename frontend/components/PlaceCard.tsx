@@ -7,9 +7,10 @@ type PlaceLike = Place | PlaceDetail | RecommendationItem;
 type Props = {
   place: PlaceLike;
   subtitle?: string;
+  actions?: React.ReactNode;
 };
 
-export default function PlaceCard({ place, subtitle }: Props) {
+export default function PlaceCard({ place, subtitle, actions }: Props) {
   const hasDistance = "distance_km" in place;
   const hasAddress = "formatted_address" in place;
   const hasType = "place_type" in place;
@@ -38,13 +39,14 @@ export default function PlaceCard({ place, subtitle }: Props) {
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <Link
           href={`/places/${placeLinkId}`}
           className="btn-secondary px-3 py-2 text-sm"
         >
           View details
         </Link>
+        {actions ? <div>{actions}</div> : null}
       </div>
     </article>
   );

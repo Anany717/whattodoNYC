@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import SaveActions from "@/components/SaveActions";
 import type { RecommendationItem } from "@/lib/types";
 
 type Props = {
@@ -22,13 +23,14 @@ export default function ResultCard({ item, rank }: Props) {
         Price: {item.price_level ? "$".repeat(item.price_level) : "N/A"} | Distance: {item.distance_km} km
       </div>
       <p className="text-sm text-slate-800">Why this: {item.why}</p>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <Link
           href={`/places/${item.place_id}`}
           className="btn-secondary px-3 py-2 text-sm"
         >
           View details
         </Link>
+        <SaveActions placeId={item.place_id} />
       </div>
     </article>
   );

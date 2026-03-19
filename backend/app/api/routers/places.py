@@ -10,6 +10,7 @@ from app.api.deps import require_roles
 from app.core.database import get_db
 from app.models import AuthenticityLabel, Place, PlaceSource, PlaceTag, Promotion, Review, User, UserRole
 from app.schemas import PlaceCreate, PlaceDetailOut, PlaceOut, PlaceSearchOut, PromotionOut, ReviewOut
+from app.services.google_places import fetch_and_cache_google_places
 from app.utils.geo import haversine_km
 
 router = APIRouter()
@@ -26,39 +27,39 @@ def search_places(
     open_now: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> PlaceSearchOut:
-    places = list(
-        db.scalars(
-            select(Place)
-            .options(selectinload(Place.tags).selectinload(PlaceTag.tag), selectinload(Place.hours))
-            .order_by(Place.created_at.desc())
-        ).all()
+    places = _load_search_places(db)
+    ranked = _rank_places(
+        places=places,
+        query=query,
+        lat=lat,
+        lng=lng,
+        radius_km=radius_km,
+        price_level=price_level,
+        tag=tag,
+        open_now=open_now,
     )
 
-    ranked: list[tuple[Place, float, float]] = []
-    today = datetime.now(timezone.utc).weekday() % 7
-    normalized_tag = tag.lower().strip() if tag else None
-
-    for place in places:
-        tag_names = _tag_names(place)
-        relevance = _search_relevance(place, query, tag_names)
-        if query and relevance <= 0:
-            continue
-        if price_level and place.price_level and place.price_level != price_level:
-            continue
-        if normalized_tag and not any(normalized_tag in tag_name for tag_name in tag_names):
-            continue
-
-        distance_km = float("inf")
-        if lat is not None and lng is not None:
-            distance_km = haversine_km(lat, lng, place.lat, place.lng)
-            if radius_km is not None and distance_km > radius_km:
-                continue
-        if open_now is True and place.hours:
-            day_rows = [hour for hour in place.hours if hour.day_of_week == today]
-            if day_rows and all(row.is_closed for row in day_rows):
-                continue
-
-        ranked.append((place, relevance, distance_km))
+    if query and lat is not None and lng is not None and len(ranked) < 8:
+        fetched = fetch_and_cache_google_places(
+            db,
+            query=query,
+            lat=lat,
+            lng=lng,
+            radius_km=radius_km or 5,
+            limit=20,
+        )
+        if fetched:
+            places = _load_search_places(db)
+            ranked = _rank_places(
+                places=places,
+                query=query,
+                lat=lat,
+                lng=lng,
+                radius_km=radius_km,
+                price_level=price_level,
+                tag=tag,
+                open_now=open_now,
+            )
 
     if query:
         ranked.sort(key=lambda item: (-item[1], item[2], item[0].name.lower()))
@@ -183,6 +184,56 @@ def place_promotions(place_id: str, db: Session = Depends(get_db)) -> list[Promo
         ).all()
     )
     return [PromotionOut.model_validate(item) for item in promotions]
+
+
+def _load_search_places(db: Session) -> list[Place]:
+    return list(
+        db.scalars(
+            select(Place)
+            .options(selectinload(Place.tags).selectinload(PlaceTag.tag), selectinload(Place.hours))
+            .order_by(Place.created_at.desc())
+        ).all()
+    )
+
+
+def _rank_places(
+    *,
+    places: list[Place],
+    query: str | None,
+    lat: float | None,
+    lng: float | None,
+    radius_km: float | None,
+    price_level: int | None,
+    tag: str | None,
+    open_now: bool | None,
+) -> list[tuple[Place, float, float]]:
+    ranked: list[tuple[Place, float, float]] = []
+    today = datetime.now(timezone.utc).weekday() % 7
+    normalized_tag = tag.lower().strip() if tag else None
+
+    for place in places:
+        tag_names = _tag_names(place)
+        relevance = _search_relevance(place, query, tag_names)
+        if query and relevance <= 0:
+            continue
+        if price_level and place.price_level and place.price_level != price_level:
+            continue
+        if normalized_tag and not any(normalized_tag in tag_name for tag_name in tag_names):
+            continue
+
+        distance_km = float("inf")
+        if lat is not None and lng is not None:
+            distance_km = haversine_km(lat, lng, place.lat, place.lng)
+            if radius_km is not None and distance_km > radius_km:
+                continue
+        if open_now is True and place.hours:
+            day_rows = [hour for hour in place.hours if hour.day_of_week == today]
+            if day_rows and all(row.is_closed for row in day_rows):
+                continue
+
+        ranked.append((place, relevance, distance_km))
+
+    return ranked
 
 
 def _tag_names(place: Place) -> list[str]:

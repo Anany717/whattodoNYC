@@ -6,17 +6,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import ReviewCard from "@/components/ReviewCard";
 import ReviewForm from "@/components/ReviewForm";
+import SaveActions from "@/components/SaveActions";
 import {
   createReview,
-  createSavedList,
   getAuthenticity,
   getPlace,
   getPlacePromotions,
   getPlaceReviews,
-  getSavedLists,
   updateReview,
   voteAuthenticity,
-  addSavedListItem
 } from "@/lib/api";
 import { getToken, loadCurrentUser } from "@/lib/auth";
 import type { PlaceDetail, Promotion, Review, User } from "@/lib/types";
@@ -98,24 +96,6 @@ export default function PlaceDetailPage() {
     }
     await voteAuthenticity(token, placeId, label);
     await loadData();
-  };
-
-  const savePlace = async () => {
-    const token = getToken();
-    if (!token) {
-      router.push("/login");
-      return;
-    }
-
-    let lists = await getSavedLists(token);
-    if (!lists.length) {
-      await createSavedList(token, "Favorites");
-      lists = await getSavedLists(token);
-    }
-
-    if (lists[0]) {
-      await addSavedListItem(token, lists[0].id, placeId);
-    }
   };
 
   if (loading) {
@@ -208,12 +188,13 @@ export default function PlaceDetailPage() {
               {myReview ? "Edit your review" : "Write review"}
             </button>
 
-            <button
-              className="btn-secondary w-full px-4 py-2 text-sm"
-              onClick={savePlace}
-            >
-              Save place
-            </button>
+            <div className="rounded-2xl border border-brand-100 bg-brand-50/70 p-3">
+              <p className="text-sm font-semibold text-slate-900">Save this place</p>
+              <p className="mt-1 text-xs text-slate-600">Use the heart for Favorites or the bookmark to choose a list.</p>
+              <div className="mt-3">
+                <SaveActions placeId={placeId} />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
               <button

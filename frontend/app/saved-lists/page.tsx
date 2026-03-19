@@ -3,30 +3,109 @@
 import { useCallback, useEffect, useState } from "react";
 
 import EmptyState from "@/components/EmptyState";
+import PlaceCard from "@/components/PlaceCard";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import SaveActions from "@/components/SaveActions";
 import SavedListCard from "@/components/SavedListCard";
-import { addSavedListItem, createSavedList, getSavedLists, removeSavedListItem } from "@/lib/api";
+import { createSavedList, getSavedLists, removeSavedListItem, searchPlaces } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import type { SavedList } from "@/lib/types";
+import type { Place, SavedList } from "@/lib/types";
+
+const DEFAULT_LAT = 40.7411;
+const DEFAULT_LNG = -73.9897;
 
 export default function SavedListsPage() {
   const [lists, setLists] = useState<SavedList[]>([]);
   const [newListName, setNewListName] = useState("");
-  const [selectedListId, setSelectedListId] = useState("");
-  const [placeIdInput, setPlaceIdInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchPriceLevel, setSearchPriceLevel] = useState("");
+  const [searchRadiusKm, setSearchRadiusKm] = useState(5);
+  const [searchLat, setSearchLat] = useState(DEFAULT_LAT);
+  const [searchLng, setSearchLng] = useState(DEFAULT_LNG);
+  const [searchResults, setSearchResults] = useState<Place[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [loadingGeo, setLoadingGeo] = useState(false);
 
   const loadLists = useCallback(async () => {
     const token = getToken();
     if (!token) return;
     const data = await getSavedLists(token);
     setLists(data);
-    setSelectedListId((prev) => prev || data[0]?.id || "");
   }, []);
+
+  const runSearch = useCallback(async () => {
+    setSearchLoading(true);
+    setSearchError(null);
+    try {
+      const response = await searchPlaces({
+        query: searchQuery || undefined,
+        lat: searchLat,
+        lng: searchLng,
+        radius_km: searchRadiusKm,
+        price_level: searchPriceLevel ? Number(searchPriceLevel) : undefined,
+      });
+      setSearchResults(response.items);
+    } catch (err) {
+      setSearchError((err as Error).message);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [searchLat, searchLng, searchPriceLevel, searchQuery, searchRadiusKm]);
 
   useEffect(() => {
     loadLists().catch((err: Error) => setError(err.message));
   }, [loadLists]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadInitialResults() {
+      setSearchLoading(true);
+      setSearchError(null);
+      try {
+        const response = await searchPlaces({
+          lat: DEFAULT_LAT,
+          lng: DEFAULT_LNG,
+          radius_km: 5,
+        });
+        if (active) {
+          setSearchResults(response.items);
+        }
+      } catch (err) {
+        if (active) {
+          setSearchError((err as Error).message);
+        }
+      } finally {
+        if (active) {
+          setSearchLoading(false);
+        }
+      }
+    }
+
+    void loadInitialResults();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const useLocation = () => {
+    if (!navigator.geolocation) {
+      return;
+    }
+    setLoadingGeo(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setSearchLat(Number(position.coords.latitude.toFixed(5)));
+        setSearchLng(Number(position.coords.longitude.toFixed(5)));
+        setLoadingGeo(false);
+      },
+      () => setLoadingGeo(false),
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  };
 
   return (
     <ProtectedRoute>
@@ -62,41 +141,76 @@ export default function SavedListsPage() {
           </article>
 
           <article className="card p-5">
-            <h2 className="text-lg font-semibold text-slate-900">Add place by ID</h2>
-            <p className="mt-1 text-xs text-slate-500">Add a place directly using its ID from a place details page.</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr,1fr,auto]">
+            <h2 className="text-lg font-semibold text-slate-900">Browse places to save</h2>
+            <p className="mt-1 text-xs text-slate-500">Use filters, then save with the heart for Favorites or the bookmark for specific lists.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="thai, jazz, rooftop..."
+                className="field-input"
+              />
               <select
-                value={selectedListId}
-                onChange={(event) => setSelectedListId(event.target.value)}
+                value={searchPriceLevel}
+                onChange={(event) => setSearchPriceLevel(event.target.value)}
                 className="field-select"
               >
-                <option value="">Select list</option>
-                {lists.map((list) => (
-                  <option key={list.id} value={list.id}>
-                    {list.name}
-                  </option>
-                ))}
+                <option value="">Any budget</option>
+                <option value="1">$</option>
+                <option value="2">$$</option>
+                <option value="3">$$$</option>
+                <option value="4">$$$$</option>
               </select>
               <input
-                value={placeIdInput}
-                onChange={(event) => setPlaceIdInput(event.target.value)}
-                placeholder="Place UUID"
+                type="number"
+                min={0.5}
+                step={0.5}
+                value={searchRadiusKm}
+                onChange={(event) => setSearchRadiusKm(Number(event.target.value))}
                 className="field-input"
               />
               <button
-                className="btn-secondary px-4 py-2 text-sm"
-                onClick={async () => {
-                  const token = getToken();
-                  if (!token || !selectedListId || !placeIdInput.trim()) return;
-                  await addSavedListItem(token, selectedListId, placeIdInput.trim());
-                  setPlaceIdInput("");
-                  await loadLists();
-                }}
+                className="btn-primary px-4 py-2 text-sm"
+                onClick={() => void runSearch()}
               >
-                Save
+                Search
               </button>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <button
+                type="button"
+                onClick={useLocation}
+                className="btn-secondary px-4 py-2 text-sm"
+              >
+                {loadingGeo ? "Locating..." : "Use my location"}
+              </button>
+              <span>
+                Lat: {searchLat.toFixed(4)} | Lng: {searchLng.toFixed(4)}
+              </span>
+            </div>
           </article>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-2xl font-semibold text-slate-900">Search results</h2>
+            {searchLoading ? <p className="text-sm text-slate-500">Searching places...</p> : null}
+          </div>
+          {searchError ? <p className="text-sm text-red-600">{searchError}</p> : null}
+          <div className="grid gap-3 lg:grid-cols-2">
+            {searchResults.length ? (
+              searchResults.map((place) => (
+                <PlaceCard
+                  key={place.id}
+                  place={place}
+                  actions={<SaveActions placeId={place.id} onChange={loadLists} />}
+                />
+              ))
+            ) : (
+              <EmptyState title="No places found" description="Try a broader keyword, a wider radius, or a different budget." />
+            )}
+          </div>
         </section>
 
         <section className="grid gap-3 lg:grid-cols-2">
