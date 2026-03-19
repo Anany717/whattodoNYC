@@ -3,7 +3,13 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.core.database import Base, SessionLocal, engine
-from app.models import Place, PlaceSource, PlaceTag, PlaceType, Tag
+from app.core.security import hash_password
+from app.models import Place, PlaceSource, PlaceTag, PlaceType, Tag, User, UserRole
+
+
+DEMO_ADMIN_EMAIL = "admin@whattodonyc.local"
+DEMO_ADMIN_PASSWORD = "AdminDemo123!"
+DEMO_ADMIN_NAME = "Demo Admin"
 
 
 def seed_record(
@@ -586,6 +592,27 @@ def upsert_place(db, record: dict) -> None:
     sync_place_tags(db, place, record["tags"])
 
 
+def upsert_demo_admin(db) -> None:
+    admin_user = db.scalar(select(User).where(User.email == DEMO_ADMIN_EMAIL))
+
+    if not admin_user:
+        admin_user = User(
+            full_name=DEMO_ADMIN_NAME,
+            email=DEMO_ADMIN_EMAIL,
+            password_hash=hash_password(DEMO_ADMIN_PASSWORD),
+            role=UserRole.admin,
+        )
+        db.add(admin_user)
+        db.flush()
+        return
+
+    admin_user.full_name = DEMO_ADMIN_NAME
+    admin_user.role = UserRole.admin
+    admin_user.password_hash = hash_password(DEMO_ADMIN_PASSWORD)
+    db.add(admin_user)
+    db.flush()
+
+
 def main() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -593,6 +620,7 @@ def main() -> None:
     try:
         for record in SEED_RECORDS:
             upsert_place(db, record)
+        upsert_demo_admin(db)
 
         db.commit()
 
@@ -603,6 +631,7 @@ def main() -> None:
             f"Seed complete: {len(SEED_RECORDS)} total entries "
             f"({restaurant_count} restaurants, {event_count} events, {activity_count} activities)"
         )
+        print(f"Demo admin login: {DEMO_ADMIN_EMAIL} / {DEMO_ADMIN_PASSWORD}")
     finally:
         db.close()
 
