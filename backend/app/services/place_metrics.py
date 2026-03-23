@@ -11,12 +11,14 @@ def tag_names(place: Place) -> list[str]:
 
 def average_rating(place: Place) -> float | None:
     if not place.reviews:
-        return None
+        return round(place.google_rating, 2) if place.google_rating is not None else None
     return round(sum(review.rating_overall for review in place.reviews) / len(place.reviews), 2)
 
 
 def review_count(place: Place) -> int:
-    return len(place.reviews)
+    if place.reviews:
+        return len(place.reviews)
+    return place.google_user_ratings_total or 0
 
 
 def authenticity_counts(place: Place) -> tuple[int, int]:

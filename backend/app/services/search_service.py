@@ -6,8 +6,8 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Place, PlaceTag
-from app.services.google_places import fetch_and_cache_google_places
+from app.models import Place, PlaceSource, PlaceTag
+from app.services.google_places import GooglePlacesFetchResult, fetch_and_cache_google_places
 from app.services.place_metrics import (
     active_promotion_boost,
     authenticity_score,
@@ -38,9 +38,22 @@ class SearchMatch:
     review_count: int
     match_summary: str | None
     secondary_score: float
+    search_source: Literal["live_google", "cached_google", "internal"]
+    search_source_label: str
+    is_live_result: bool
+    source_priority: int
 
 
-MIN_INTERNAL_MATCHES = 8
+@dataclass
+class SearchExecution:
+    matches: list[SearchMatch]
+    google_results_used: bool
+    live_search_attempted: bool
+    live_search_succeeded: bool
+    live_result_count: int
+    status_message: str | None
+
+
 DEFAULT_LIMIT = 20
 
 
@@ -56,7 +69,21 @@ def run_place_search(
     open_now: bool | None,
     sort_by: SearchSortBy,
     limit: int = DEFAULT_LIMIT,
-) -> tuple[list[SearchMatch], bool]:
+) -> SearchExecution:
+    has_query = bool(query and query.strip())
+    google_result = GooglePlacesFetchResult(places=[], attempted=False, succeeded=False, error=None)
+
+    if has_query:
+        google_result = fetch_and_cache_google_places(
+            db,
+            query=query or "things to do",
+            lat=lat,
+            lng=lng,
+            radius_km=radius_km,
+            limit=max(limit, 15),
+        )
+
+    live_result_place_ids = {place.id for place in google_result.places}
     matches = _rank_candidates(
         places=_load_search_places(db),
         query=query,
@@ -66,53 +93,22 @@ def run_place_search(
         price_level=price_level,
         tag=tag,
         open_now=open_now,
+        live_result_place_ids=live_result_place_ids,
     )
-
-    google_results_used = False
-    if _should_fetch_google(query=query, lat=lat, lng=lng, matches=matches):
-        fetched = fetch_and_cache_google_places(
-            db,
-            query=query or "things to do",
-            lat=lat or 40.7411,
-            lng=lng or -73.9897,
-            radius_km=radius_km or 5,
-            limit=max(limit, 15),
-        )
-        if fetched:
-            google_results_used = True
-            matches = _rank_candidates(
-                places=_load_search_places(db),
-                query=query,
-                lat=lat,
-                lng=lng,
-                radius_km=radius_km,
-                price_level=price_level,
-                tag=tag,
-                open_now=open_now,
-            )
 
     sorted_matches = _sort_matches(
         matches,
         sort_by=sort_by,
-        has_query=bool(query and query.strip()),
+        has_query=has_query,
     )
     deduped_matches = _dedupe_matches(sorted_matches)
-    return deduped_matches[:limit], google_results_used
-
-
-def _should_fetch_google(
-    *,
-    query: str | None,
-    lat: float | None,
-    lng: float | None,
-    matches: list[SearchMatch],
-) -> bool:
-    return bool(
-        query
-        and query.strip()
-        and lat is not None
-        and lng is not None
-        and len(matches) < MIN_INTERNAL_MATCHES
+    return SearchExecution(
+        matches=deduped_matches[:limit],
+        google_results_used=bool(live_result_place_ids),
+        live_search_attempted=google_result.attempted,
+        live_search_succeeded=google_result.succeeded,
+        live_result_count=len(live_result_place_ids),
+        status_message=_build_status_message(has_query=has_query, google_result=google_result),
     )
 
 
@@ -127,7 +123,11 @@ def _load_search_places(db: Session) -> list[Place]:
                 selectinload(Place.authenticity_votes),
                 selectinload(Place.promotions),
             )
-            .order_by(Place.updated_at.desc(), Place.created_at.desc())
+            .order_by(
+                Place.external_last_synced_at.desc(),
+                Place.updated_at.desc(),
+                Place.created_at.desc(),
+            )
         ).all()
     )
 
@@ -142,6 +142,7 @@ def _rank_candidates(
     price_level: int | None,
     tag: str | None,
     open_now: bool | None,
+    live_result_place_ids: set[str],
 ) -> list[SearchMatch]:
     normalized_tag = tag.lower().strip() if tag else None
     matches: list[SearchMatch] = []
@@ -168,12 +169,16 @@ def _rank_candidates(
         auth_score = authenticity_score(place)
         reviews = review_count(place)
         promo_boost = active_promotion_boost(place)
+        search_source, search_source_label, source_priority = _search_source(
+            place, live_result_place_ids
+        )
         secondary_score = _secondary_score(
             distance_km=distance_km,
             average_rating_value=avg_rating,
             authenticity_score_value=auth_score,
             review_count_value=reviews,
             promotion_boost_value=promo_boost,
+            source_priority=source_priority,
         )
 
         matches.append(
@@ -191,8 +196,13 @@ def _rank_candidates(
                     average_rating_value=avg_rating,
                     authenticity_score_value=auth_score,
                     promotion_boost_value=promo_boost,
+                    search_source=search_source,
                 ),
                 secondary_score=secondary_score,
+                search_source=search_source,
+                search_source_label=search_source_label,
+                is_live_result=place.id in live_result_place_ids,
+                source_priority=source_priority,
             )
         )
 
@@ -212,45 +222,50 @@ def _keyword_relevance(place: Place, query: str | None, tags: list[str]) -> floa
     place_type = place.place_type.value.lower()
     neighborhood = (place.neighborhood or "").lower()
     address = (place.formatted_address or "").lower()
+    primary_type = (place.google_primary_type or "").replace("_", "-").lower()
 
     score = 0.0
-    max_score = 10.0 + (len(tokens) * 4.5)
+    max_score = 12.0 + (len(tokens) * 5.2)
 
     if normalized_query in name:
-        score += 8.0
+        score += 9.5
     elif any(token in name for token in tokens):
-        score += 2.0
+        score += 2.5
 
     if normalized_query in " ".join(tags):
-        score += 4.0
+        score += 5.5
     if normalized_query == place_type:
-        score += 4.0
+        score += 4.5
     elif normalized_query in place_type:
-        score += 2.5
+        score += 3.0
     if normalized_query in neighborhood:
-        score += 2.5
+        score += 3.0
     if normalized_query in address:
-        score += 2.0
+        score += 2.4
+    if normalized_query in primary_type:
+        score += 2.2
 
     token_hits = 0
     for token in tokens:
         token_score = 0.0
         if token in name:
-            token_score += 3.0
+            token_score += 3.3
         if any(token in tag for tag in tags):
-            token_score += 2.8
+            token_score += 3.1
         if token == place_type or token in place_type:
-            token_score += 2.3
+            token_score += 2.5
         if token in neighborhood:
-            token_score += 1.6
+            token_score += 1.8
         if token in address:
-            token_score += 1.1
+            token_score += 1.3
+        if token in primary_type:
+            token_score += 1.6
         if token_score > 0:
             token_hits += 1
         score += token_score
 
     coverage_bonus = token_hits / len(tokens)
-    score += coverage_bonus * 3.0
+    score += coverage_bonus * 4.2
 
     return min(1.0, score / max_score)
 
@@ -262,16 +277,19 @@ def _secondary_score(
     authenticity_score_value: float,
     review_count_value: int,
     promotion_boost_value: float,
+    source_priority: int,
 ) -> float:
     distance_score = 0.4 if distance_km is None else min(1.0, 1 / (distance_km + 0.25) / 2)
     rating_score = (average_rating_value / 5) if average_rating_value is not None else 0.45
-    review_volume_score = min(0.15, review_count_value * 0.02)
+    review_volume_score = min(0.18, review_count_value * 0.015)
+    source_bonus = source_priority * 0.04
     return round(
-        (distance_score * 0.35)
-        + (rating_score * 0.35)
-        + (authenticity_score_value * 0.2)
+        (distance_score * 0.32)
+        + (rating_score * 0.34)
+        + (authenticity_score_value * 0.18)
         + review_volume_score
-        + (promotion_boost_value * 0.1),
+        + (promotion_boost_value * 0.08)
+        + source_bonus,
         3,
     )
 
@@ -284,8 +302,14 @@ def _build_match_summary(
     average_rating_value: float | None,
     authenticity_score_value: float,
     promotion_boost_value: float,
+    search_source: Literal["live_google", "cached_google", "internal"],
 ) -> str | None:
     reasons: list[tuple[float, str]] = []
+
+    if search_source == "live_google":
+        reasons.append((0.98, "fresh Google match"))
+    elif search_source == "cached_google":
+        reasons.append((0.45, "recently synced place data"))
 
     if relevance_score >= 0.6:
         reasons.append((relevance_score, "strong keyword match"))
@@ -328,6 +352,7 @@ def _sort_matches(
                 item.place.price_level is None,
                 item.place.price_level or 99,
                 -item.relevance_score,
+                -item.source_priority,
                 item.distance_km if item.distance_km is not None else float("inf"),
                 item.place.name.lower(),
             ),
@@ -340,6 +365,7 @@ def _sort_matches(
                 item.place.price_level is None,
                 -(item.place.price_level or 0),
                 -item.relevance_score,
+                -item.source_priority,
                 item.distance_km if item.distance_km is not None else float("inf"),
                 item.place.name.lower(),
             ),
@@ -352,6 +378,7 @@ def _sort_matches(
                 item.average_rating is None,
                 -(item.average_rating or 0),
                 -item.relevance_score,
+                -item.source_priority,
                 item.distance_km if item.distance_km is not None else float("inf"),
                 item.place.name.lower(),
             ),
@@ -364,6 +391,7 @@ def _sort_matches(
                 item.distance_km is None,
                 item.distance_km if item.distance_km is not None else float("inf"),
                 -item.relevance_score,
+                -item.source_priority,
                 -item.secondary_score,
                 item.place.name.lower(),
             ),
@@ -375,6 +403,7 @@ def _sort_matches(
             key=lambda item: (
                 -item.authenticity_score,
                 -item.relevance_score,
+                -item.source_priority,
                 item.distance_km if item.distance_km is not None else float("inf"),
                 item.place.name.lower(),
             ),
@@ -385,6 +414,7 @@ def _sort_matches(
             matches,
             key=lambda item: (
                 -item.relevance_score,
+                -item.source_priority,
                 -item.secondary_score,
                 item.distance_km if item.distance_km is not None else float("inf"),
                 item.place.name.lower(),
@@ -398,6 +428,7 @@ def _sort_matches(
             item.distance_km if item.distance_km is not None else float("inf"),
             -(item.average_rating or 0),
             -item.authenticity_score,
+            -item.source_priority,
             item.place.name.lower(),
         ),
     )
@@ -429,6 +460,40 @@ def _is_duplicate(left: SearchMatch, right: SearchMatch) -> bool:
         return True
 
     return haversine_km(left.place.lat, left.place.lng, right.place.lat, right.place.lng) <= 0.15
+
+
+def _search_source(
+    place: Place,
+    live_result_place_ids: set[str],
+) -> tuple[Literal["live_google", "cached_google", "internal"], str, int]:
+    if place.id in live_result_place_ids:
+        return "live_google", "Live Google result", 2
+    if place.is_cached_from_external or place.source == PlaceSource.google:
+        return "cached_google", "Cached external place", 1
+    return "internal", "Local catalog match", 0
+
+
+def _build_status_message(*, has_query: bool, google_result: GooglePlacesFetchResult) -> str | None:
+    if not has_query:
+        return "Showing the local NYC catalog. Add keywords to trigger live Google search."
+    if google_result.attempted and google_result.succeeded and google_result.places:
+        return (
+            "Live Google Places search is active for this query, "
+            "with results cached and enriched by our local data."
+        )
+    if google_result.attempted and google_result.succeeded:
+        return (
+            "Google Places ran for this query, but there were no fresh matches. "
+            "Showing cached/local results instead."
+        )
+    if google_result.error:
+        if "configured" in google_result.error.lower():
+            return (
+                "Live Google search is not available in this environment yet. "
+                "Showing cached/local results instead."
+            )
+        return "Live Google search is unavailable right now. Showing cached/local results instead."
+    return "Showing cached/local results."
 
 
 def _normalize_text(value: str | None) -> str:

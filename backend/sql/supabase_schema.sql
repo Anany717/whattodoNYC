@@ -18,6 +18,9 @@ create table if not exists users (
 create table if not exists places (
   id uuid primary key default gen_random_uuid(),
   google_place_id text unique,
+  google_primary_type text,
+  google_rating double precision,
+  google_user_ratings_total integer,
   source place_source not null,
   place_type place_type not null,
   name text not null,
@@ -28,6 +31,10 @@ create table if not exists places (
   price_level integer check (price_level between 1 and 4),
   phone text,
   website text,
+  external_last_synced_at timestamptz,
+  external_raw_json jsonb,
+  is_seed_data boolean not null default false,
+  is_cached_from_external boolean not null default false,
   managed_by_user_id uuid references users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

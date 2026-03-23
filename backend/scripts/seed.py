@@ -4,8 +4,15 @@ from sqlalchemy import select
 
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
-from app.models import Place, PlaceSource, PlaceTag, PlaceType, Tag, User, UserRole
-
+from app.models import (
+    Place,
+    PlaceSource,
+    PlaceTag,
+    PlaceType,
+    Tag,
+    User,
+    UserRole,
+)
 
 DEMO_ADMIN_EMAIL = "admin@whattodonyc.local"
 DEMO_ADMIN_PASSWORD = "AdminDemo123!"
@@ -574,7 +581,9 @@ def upsert_place(db, record: dict) -> None:
     place = db.scalar(select(Place).where(Place.name == record["name"]))
 
     if not place:
-        place = Place(name=record["name"], source=PlaceSource.internal, place_type=record["place_type"])
+        place = Place(
+            name=record["name"], source=PlaceSource.internal, place_type=record["place_type"]
+        )
         db.add(place)
 
     place.source = PlaceSource.internal
@@ -586,6 +595,7 @@ def upsert_place(db, record: dict) -> None:
     place.price_level = record["price_level"]
     place.phone = record["phone"]
     place.website = record["website"]
+    place.is_seed_data = True
 
     db.add(place)
     db.flush()
@@ -624,9 +634,13 @@ def main() -> None:
 
         db.commit()
 
-        restaurant_count = sum(1 for record in SEED_RECORDS if record["place_type"] == PlaceType.restaurant)
+        restaurant_count = sum(
+            1 for record in SEED_RECORDS if record["place_type"] == PlaceType.restaurant
+        )
         event_count = sum(1 for record in SEED_RECORDS if record["place_type"] == PlaceType.event)
-        activity_count = sum(1 for record in SEED_RECORDS if record["place_type"] == PlaceType.activity)
+        activity_count = sum(
+            1 for record in SEED_RECORDS if record["place_type"] == PlaceType.activity
+        )
         print(
             f"Seed complete: {len(SEED_RECORDS)} total entries "
             f"({restaurant_count} restaurants, {event_count} events, {activity_count} activities)"

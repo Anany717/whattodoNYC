@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -12,48 +14,109 @@ from app.models import Place, PlaceSource, PlaceTag, PlaceType, Tag
 from app.utils.geo import haversine_km
 
 GOOGLE_TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+GOOGLE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+DETAIL_FIELDS = ",".join(
+    [
+        "place_id",
+        "name",
+        "formatted_address",
+        "geometry/location",
+        "price_level",
+        "formatted_phone_number",
+        "website",
+        "rating",
+        "user_ratings_total",
+        "types",
+    ]
+)
 NYC_HINTS = ("new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island")
+NYC_CENTER = (40.7411, -73.9897)
+DETAIL_ENRICH_LIMIT = 6
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GooglePlacesFetchResult:
+    places: list[Place]
+    attempted: bool
+    succeeded: bool
+    error: str | None = None
 
 
 def fetch_and_cache_google_places(
     db: Session,
     *,
     query: str,
-    lat: float,
-    lng: float,
-    radius_km: float,
+    lat: float | None,
+    lng: float | None,
+    radius_km: float | None,
     limit: int = 15,
-) -> list[Place]:
-    if not settings.google_places_api_key:
-        return []
+) -> GooglePlacesFetchResult:
+    if not query.strip():
+        return GooglePlacesFetchResult(
+            places=[], attempted=False, succeeded=False, error="Query is required"
+        )
 
-    params = {
+    if not settings.google_places_api_key:
+        return GooglePlacesFetchResult(
+            places=[],
+            attempted=False,
+            succeeded=False,
+            error="Google Places API key is not configured",
+        )
+
+    params: dict[str, Any] = {
         "query": _query_with_city_hint(query),
-        "location": f"{lat},{lng}",
-        "radius": min(50000, max(500, int(radius_km * 1000))),
         "region": "us",
+        "language": "en",
         "key": settings.google_places_api_key,
     }
+    if lat is not None and lng is not None:
+        params["location"] = f"{lat},{lng}"
+        if radius_km is not None:
+            params["radius"] = min(50000, max(500, int(radius_km * 1000)))
 
     try:
-        response = requests.get(GOOGLE_TEXT_SEARCH_URL, params=params, timeout=8)
+        response = requests.get(GOOGLE_TEXT_SEARCH_URL, params=params, timeout=10)
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Google Places request failed: %s", exc)
-        return []
+        logger.warning("Google Places text search failed for %r: %s", query, exc)
+        return GooglePlacesFetchResult(
+            places=[],
+            attempted=True,
+            succeeded=False,
+            error="Google Places search request failed",
+        )
 
     status = payload.get("status", "UNKNOWN")
     if status == "ZERO_RESULTS":
-        return []
+        return GooglePlacesFetchResult(places=[], attempted=True, succeeded=True, error=None)
     if status != "OK":
         logger.warning("Google Places returned status %s for query %r", status, query)
-        return []
+        return GooglePlacesFetchResult(
+            places=[],
+            attempted=True,
+            succeeded=False,
+            error=f"Google Places returned status {status}",
+        )
 
     cached: list[Place] = []
-    for item in (payload.get("results") or [])[:limit]:
-        normalized = _normalize_google_result(item, fallback_lat=lat, fallback_lng=lng)
+    fallback_lat = lat if lat is not None else NYC_CENTER[0]
+    fallback_lng = lng if lng is not None else NYC_CENTER[1]
+
+    for index, item in enumerate((payload.get("results") or [])[:limit]):
+        details = None
+        place_id = item.get("place_id")
+        if index < DETAIL_ENRICH_LIMIT and isinstance(place_id, str) and place_id:
+            details = _fetch_place_details(place_id)
+
+        normalized = _normalize_google_result(
+            item,
+            details=details,
+            fallback_lat=fallback_lat,
+            fallback_lng=fallback_lng,
+        )
         if not normalized:
             continue
 
@@ -62,7 +125,32 @@ def fetch_and_cache_google_places(
             cached.append(place)
 
     db.commit()
-    return cached
+    return GooglePlacesFetchResult(places=cached, attempted=True, succeeded=True, error=None)
+
+
+def _fetch_place_details(place_id: str) -> dict[str, Any] | None:
+    try:
+        response = requests.get(
+            GOOGLE_DETAILS_URL,
+            params={
+                "place_id": place_id,
+                "fields": DETAIL_FIELDS,
+                "language": "en",
+                "key": settings.google_places_api_key,
+            },
+            timeout=8,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Google Place Details lookup failed for %s: %s", place_id, exc)
+        return None
+
+    status = payload.get("status", "UNKNOWN")
+    if status != "OK":
+        logger.info("Google Place Details returned status %s for %s", status, place_id)
+        return None
+    return payload.get("result") if isinstance(payload.get("result"), dict) else None
 
 
 def _query_with_city_hint(query: str) -> str:
@@ -75,20 +163,45 @@ def _query_with_city_hint(query: str) -> str:
 def _normalize_google_result(
     item: dict[str, Any],
     *,
+    details: dict[str, Any] | None,
     fallback_lat: float,
     fallback_lng: float,
 ) -> dict[str, Any] | None:
-    google_place_id = item.get("place_id")
-    name = item.get("name")
+    google_place_id = item.get("place_id") or (details or {}).get("place_id")
+    name = item.get("name") or (details or {}).get("name")
     if not google_place_id or not name:
         return None
 
-    geometry = (item.get("geometry") or {}).get("location") or {}
-    types = [value for value in item.get("types") or [] if isinstance(value, str)]
-    formatted_address = item.get("formatted_address") or item.get("vicinity")
-    lat = geometry.get("lat", fallback_lat)
-    lng = geometry.get("lng", fallback_lng)
-    price_level = item.get("price_level")
+    details_payload = details or {}
+    geometry = details_payload.get("geometry") or item.get("geometry") or {}
+    location = geometry.get("location") or {}
+    types = [
+        value
+        for value in (details_payload.get("types") or item.get("types") or [])
+        if isinstance(value, str)
+    ]
+    formatted_address = (
+        details_payload.get("formatted_address")
+        or item.get("formatted_address")
+        or item.get("vicinity")
+    )
+    lat = location.get("lat", fallback_lat)
+    lng = location.get("lng", fallback_lng)
+    price_level = (
+        details_payload.get("price_level")
+        if details_payload.get("price_level") is not None
+        else item.get("price_level")
+    )
+    google_rating = (
+        details_payload.get("rating")
+        if details_payload.get("rating") is not None
+        else item.get("rating")
+    )
+    google_user_ratings_total = (
+        details_payload.get("user_ratings_total")
+        if details_payload.get("user_ratings_total") is not None
+        else item.get("user_ratings_total")
+    )
 
     return {
         "google_place_id": google_place_id,
@@ -97,17 +210,31 @@ def _normalize_google_result(
         "neighborhood": _extract_neighborhood(formatted_address),
         "lat": lat,
         "lng": lng,
-        "price_level": (
-            price_level if isinstance(price_level, int) and 1 <= price_level <= 4 else None
-        ),
+        "price_level": price_level
+        if isinstance(price_level, int) and 1 <= price_level <= 4
+        else None,
         "place_type": _map_place_type(types),
+        "google_primary_type": types[0] if types else None,
+        "google_rating": float(google_rating) if isinstance(google_rating, (int, float)) else None,
+        "google_user_ratings_total": (
+            int(google_user_ratings_total)
+            if isinstance(google_user_ratings_total, (int, float))
+            and google_user_ratings_total >= 0
+            else None
+        ),
+        "phone": details_payload.get("formatted_phone_number"),
+        "website": details_payload.get("website"),
         "tags": _google_tags(types),
+        "external_raw_json": {
+            "text_search": item,
+            "details": details_payload or None,
+        },
     }
 
 
 def _map_place_type(types: list[str]) -> PlaceType:
     lowered = set(types)
-    if lowered & {"event_venue", "concert_hall", "movie_theater", "night_club"}:
+    if lowered & {"event_venue", "concert_hall", "movie_theater", "night_club", "bar", "casino"}:
         return PlaceType.event
     if lowered & {
         "tourist_attraction",
@@ -138,15 +265,17 @@ def _google_tags(types: list[str]) -> list[str]:
         if place_type in skip:
             continue
         tags.append(place_type.replace("_", "-"))
-    return tags[:6]
+    return tags[:8]
 
 
 def _extract_neighborhood(address: str | None) -> str | None:
     if not address:
         return None
     parts = [part.strip() for part in address.split(",") if part.strip()]
+    if len(parts) >= 3:
+        return parts[-3]
     if len(parts) >= 2:
-        return parts[-3] if len(parts) >= 3 else parts[0]
+        return parts[0]
     return parts[0] if parts else None
 
 
@@ -158,18 +287,35 @@ def _upsert_google_place(db: Session, payload: dict[str, Any]) -> Place | None:
     if existing:
         if not existing.google_place_id:
             existing.google_place_id = payload["google_place_id"]
-        if existing.source != PlaceSource.internal:
-            existing.source = PlaceSource.google
-        if payload.get("formatted_address") and not existing.formatted_address:
-            existing.formatted_address = payload["formatted_address"]
-        if payload.get("neighborhood") and not existing.neighborhood:
-            existing.neighborhood = payload["neighborhood"]
-        if payload.get("price_level") and existing.price_level is None:
-            existing.price_level = payload["price_level"]
         if existing.source == PlaceSource.google:
+            existing.name = payload["name"]
+            existing.place_type = payload["place_type"]
             existing.lat = payload["lat"]
             existing.lng = payload["lng"]
-            existing.place_type = payload["place_type"]
+        if payload.get("formatted_address") and (
+            not existing.formatted_address or existing.source == PlaceSource.google
+        ):
+            existing.formatted_address = payload["formatted_address"]
+        if payload.get("neighborhood") and (
+            not existing.neighborhood or existing.source == PlaceSource.google
+        ):
+            existing.neighborhood = payload["neighborhood"]
+        if payload.get("price_level") is not None and (
+            existing.price_level is None or existing.source == PlaceSource.google
+        ):
+            existing.price_level = payload["price_level"]
+        if payload.get("phone") and not existing.phone:
+            existing.phone = payload["phone"]
+        if payload.get("website") and not existing.website:
+            existing.website = payload["website"]
+
+        existing.google_primary_type = payload.get("google_primary_type")
+        existing.google_rating = payload.get("google_rating")
+        existing.google_user_ratings_total = payload.get("google_user_ratings_total")
+        existing.external_last_synced_at = datetime.now(timezone.utc)
+        existing.external_raw_json = payload.get("external_raw_json")
+        existing.is_cached_from_external = True
+
         _sync_tags(db, existing, payload["tags"])
         db.add(existing)
         db.flush()
@@ -177,6 +323,9 @@ def _upsert_google_place(db: Session, payload: dict[str, Any]) -> Place | None:
 
     place = Place(
         google_place_id=payload["google_place_id"],
+        google_primary_type=payload.get("google_primary_type"),
+        google_rating=payload.get("google_rating"),
+        google_user_ratings_total=payload.get("google_user_ratings_total"),
         source=PlaceSource.google,
         place_type=payload["place_type"],
         name=payload["name"],
@@ -185,8 +334,11 @@ def _upsert_google_place(db: Session, payload: dict[str, Any]) -> Place | None:
         lat=payload["lat"],
         lng=payload["lng"],
         price_level=payload["price_level"],
-        phone=None,
-        website=None,
+        phone=payload.get("phone"),
+        website=payload.get("website"),
+        external_last_synced_at=datetime.now(timezone.utc),
+        external_raw_json=payload.get("external_raw_json"),
+        is_cached_from_external=True,
     )
     db.add(place)
     db.flush()

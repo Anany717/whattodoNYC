@@ -32,20 +32,19 @@ class ScoreBreakdown:
 
 
 WEIGHTS = {
-    "keyword_relevance": 0.38,
-    "distance_score": 0.14,
-    "price_fit": 0.11,
-    "group_fit": 0.08,
-    "weather_fit": 0.07,
-    "review_strength": 0.10,
-    "authenticity_score": 0.08,
+    "keyword_relevance": 0.48,
+    "distance_score": 0.12,
+    "price_fit": 0.09,
+    "group_fit": 0.07,
+    "weather_fit": 0.06,
+    "review_strength": 0.08,
+    "authenticity_score": 0.06,
     "promotion_boost": 0.04,
 }
 
 
 def get_recommendations(db: Session, req: RecommendationRequest) -> list[RecommendationItem]:
-    candidates = _load_candidates(db)
-    if _should_expand_candidates(candidates, req):
+    if req.keywords.strip():
         fetch_and_cache_google_places(
             db,
             query=req.keywords,
@@ -54,7 +53,8 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
             radius_km=req.radius_km,
             limit=20,
         )
-        candidates = _load_candidates(db)
+
+    candidates = _load_candidates(db)
 
     weather = get_weather_snapshot(db, lat=req.lat, lng=req.lng)
     scored: list[tuple[RecommendationItem, float]] = []
@@ -71,6 +71,8 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
             continue
 
         breakdown = _score_place(place=place, req=req, weather=weather, distance_km=distance_km)
+        if req.keywords.strip() and breakdown.keyword_relevance < 0.12:
+            continue
         score = sum(WEIGHTS[key] * getattr(breakdown, key) for key in WEIGHTS)
         why = _build_why(breakdown)
 
@@ -78,6 +80,11 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
             place_id=place.id,
             name=place.name,
             price_level=place.price_level,
+            formatted_address=place.formatted_address,
+            source=place.source,
+            google_rating=place.google_rating,
+            google_user_ratings_total=place.google_user_ratings_total,
+            is_cached_from_external=place.is_cached_from_external,
             lat=place.lat,
             lng=place.lng,
             distance_km=round(distance_km, 2),
@@ -103,18 +110,6 @@ def _load_candidates(db: Session) -> list[Place]:
         .order_by(Place.updated_at.desc(), Place.created_at.desc())
     )
     return list(db.scalars(query).all())
-
-
-def _should_expand_candidates(candidates: list[Place], req: RecommendationRequest) -> bool:
-    relevant_matches = 0
-    for place in candidates:
-        if haversine_km(req.lat, req.lng, place.lat, place.lng) > req.radius_km:
-            continue
-        if _keyword_relevance(place, req.keywords) >= 0.35:
-            relevant_matches += 1
-        if relevant_matches >= 10:
-            return False
-    return True
 
 
 def _score_place(
@@ -155,45 +150,50 @@ def _keyword_relevance(place: Place, keywords: str) -> float:
     place_type = place.place_type.value.lower()
     neighborhood = (place.neighborhood or "").lower()
     address = (place.formatted_address or "").lower()
+    primary_type = (place.google_primary_type or "").replace("_", "-").lower()
     tags = tag_names(place)
 
     score = 0.0
-    max_score = 10.0 + (len(tokens) * 4.5)
+    max_score = 12.0 + (len(tokens) * 5.2)
 
     if normalized_query in name:
-        score += 8.0
+        score += 9.5
     elif any(token in name for token in tokens):
-        score += 2.0
+        score += 2.5
 
     if normalized_query in " ".join(tags):
-        score += 4.0
+        score += 5.5
     if normalized_query == place_type:
-        score += 4.0
+        score += 4.5
     elif normalized_query in place_type:
-        score += 2.5
+        score += 3.0
     if normalized_query in neighborhood:
-        score += 2.5
+        score += 3.0
     if normalized_query in address:
-        score += 2.0
+        score += 2.4
+    if normalized_query in primary_type:
+        score += 2.2
 
     token_hits = 0
     for token in tokens:
         token_score = 0.0
         if token in name:
-            token_score += 3.0
+            token_score += 3.3
         if any(token in tag for tag in tags):
-            token_score += 2.8
+            token_score += 3.1
         if token == place_type or token in place_type:
-            token_score += 2.3
+            token_score += 2.5
         if token in neighborhood:
-            token_score += 1.6
+            token_score += 1.8
         if token in address:
-            token_score += 1.1
+            token_score += 1.3
+        if token in primary_type:
+            token_score += 1.6
         if token_score > 0:
             token_hits += 1
         score += token_score
 
-    score += (token_hits / len(tokens)) * 3.0
+    score += (token_hits / len(tokens)) * 4.2
     return min(1.0, score / max_score)
 
 

@@ -58,6 +58,10 @@ export default function ResultsClient() {
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [googleUsed, setGoogleUsed] = useState(false);
+  const [liveSearchAttempted, setLiveSearchAttempted] = useState(false);
+  const [liveSearchSucceeded, setLiveSearchSucceeded] = useState(false);
+  const [liveResultCount, setLiveResultCount] = useState(0);
+  const [searchStatusMessage, setSearchStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -97,6 +101,10 @@ export default function ResultsClient() {
         if (searchResult.status === "fulfilled") {
           setSearchResults(searchResult.value.items);
           setGoogleUsed(searchResult.value.google_results_used);
+          setLiveSearchAttempted(searchResult.value.live_search_attempted);
+          setLiveSearchSucceeded(searchResult.value.live_search_succeeded);
+          setLiveResultCount(searchResult.value.live_result_count);
+          setSearchStatusMessage(searchResult.value.status_message);
         } else {
           setSearchError(
             searchResult.reason instanceof Error ? searchResult.reason.message : "Could not load search results."
@@ -149,13 +157,24 @@ export default function ResultsClient() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-2xl font-semibold text-slate-900">Search results</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Sorted by {sortLabel(sortBy)}. {googleUsed ? "Expanded with nearby live place matches when our local catalog was thin." : "Using our local place catalog."}
-            </p>
+            <p className="mt-1 text-sm text-slate-600">Sorted by {sortLabel(sortBy)}.</p>
+            {searchStatusMessage ? <p className="mt-2 text-sm text-slate-700">{searchStatusMessage}</p> : null}
           </div>
-          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-            {searchResults.length} results
-          </span>
+          <div className="flex flex-wrap gap-2">
+            {googleUsed ? (
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                {liveResultCount} live Google matches
+              </span>
+            ) : null}
+            {liveSearchAttempted && !liveSearchSucceeded ? (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                Using fallback results
+              </span>
+            ) : null}
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {searchResults.length} results
+            </span>
+          </div>
         </div>
 
         {searchError ? <p className="mb-3 text-sm text-red-600">{searchError}</p> : null}

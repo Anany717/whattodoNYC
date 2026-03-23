@@ -24,6 +24,9 @@ export type AuthTokenResponse = {
 export type Place = {
   id: string;
   google_place_id: string | null;
+  google_primary_type: string | null;
+  google_rating: number | null;
+  google_user_ratings_total: number | null;
   source: "google" | "internal";
   place_type: PlaceType;
   name: string;
@@ -34,6 +37,9 @@ export type Place = {
   price_level: number | null;
   phone: string | null;
   website: string | null;
+  external_last_synced_at: string | null;
+  is_seed_data: boolean;
+  is_cached_from_external: boolean;
   managed_by_user_id: string | null;
 };
 
@@ -44,10 +50,17 @@ export type PlaceSearchItem = Place & {
   review_count: number;
   relevance_score: number;
   match_summary: string | null;
+  search_source: "live_google" | "cached_google" | "internal";
+  search_source_label: string | null;
+  is_live_result: boolean;
 };
 
 export type PlaceDetail = {
   id: string;
+  google_place_id: string | null;
+  google_primary_type: string | null;
+  google_rating: number | null;
+  google_user_ratings_total: number | null;
   name: string;
   formatted_address: string | null;
   neighborhood: string | null;
@@ -57,6 +70,9 @@ export type PlaceDetail = {
   website: string | null;
   lat: number;
   lng: number;
+  external_last_synced_at: string | null;
+  is_seed_data: boolean;
+  is_cached_from_external: boolean;
   tags: string[];
   average_rating: number | null;
   authenticity_score: number;
@@ -164,6 +180,11 @@ export type RecommendationItem = {
   place_id: string;
   name: string;
   price_level: number | null;
+  formatted_address: string | null;
+  source: "google" | "internal";
+  google_rating: number | null;
+  google_user_ratings_total: number | null;
+  is_cached_from_external: boolean;
   lat: number;
   lng: number;
   distance_km: number;
@@ -179,4 +200,8 @@ export type PlaceSearchResponse = {
   items: PlaceSearchItem[];
   sort_by: SearchSortBy;
   google_results_used: boolean;
+  live_search_attempted: boolean;
+  live_search_succeeded: boolean;
+  live_result_count: number;
+  status_message: string | null;
 };

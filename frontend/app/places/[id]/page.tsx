@@ -115,6 +115,18 @@ export default function PlaceDetailPage() {
       <section className="space-y-6">
         <article className="card p-6">
           <h1 className="font-display text-3xl font-bold text-slate-900">{place.name}</h1>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {place.is_cached_from_external ? (
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                Google-backed place data
+              </span>
+            ) : null}
+            {place.is_seed_data ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                Local catalog listing
+              </span>
+            ) : null}
+          </div>
           <p className="mt-2 text-sm text-slate-600">{place.formatted_address || "Address unavailable"}</p>
 
           <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
@@ -136,6 +148,16 @@ export default function PlaceDetailPage() {
             </p>
             <p>
               <span className="font-semibold">Review count:</span> {place.review_count}
+            </p>
+            <p>
+              <span className="font-semibold">Google rating:</span>{" "}
+              {typeof place.google_rating === "number"
+                ? `${place.google_rating.toFixed(1)}${place.google_user_ratings_total ? ` (${place.google_user_ratings_total.toLocaleString()} ratings)` : ""}`
+                : "N/A"}
+            </p>
+            <p>
+              <span className="font-semibold">Last synced:</span>{" "}
+              {place.external_last_synced_at ? new Date(place.external_last_synced_at).toLocaleString() : "N/A"}
             </p>
           </div>
 

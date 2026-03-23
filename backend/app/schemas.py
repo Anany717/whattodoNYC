@@ -55,6 +55,9 @@ class PlaceCreate(BaseModel):
 class PlaceOut(BaseModel):
     id: str
     google_place_id: str | None
+    google_primary_type: str | None = None
+    google_rating: float | None = None
+    google_user_ratings_total: int | None = None
     source: PlaceSource
     place_type: PlaceType
     name: str
@@ -65,6 +68,9 @@ class PlaceOut(BaseModel):
     price_level: int | None
     phone: str | None
     website: str | None
+    external_last_synced_at: datetime | None = None
+    is_seed_data: bool = False
+    is_cached_from_external: bool = False
     managed_by_user_id: str | None
 
     model_config = ConfigDict(from_attributes=True)
@@ -72,6 +78,10 @@ class PlaceOut(BaseModel):
 
 class PlaceDetailOut(BaseModel):
     id: str
+    google_place_id: str | None = None
+    google_primary_type: str | None = None
+    google_rating: float | None = None
+    google_user_ratings_total: int | None = None
     name: str
     formatted_address: str | None
     neighborhood: str | None
@@ -81,6 +91,9 @@ class PlaceDetailOut(BaseModel):
     website: str | None
     lat: float
     lng: float
+    external_last_synced_at: datetime | None = None
+    is_seed_data: bool = False
+    is_cached_from_external: bool = False
     tags: list[str] = Field(default_factory=list)
     average_rating: float | None = None
     authenticity_score: float = 0.5
@@ -104,12 +117,19 @@ class PlaceSearchItemOut(PlaceOut):
     review_count: int = 0
     relevance_score: float = 0.0
     match_summary: str | None = None
+    search_source: Literal["live_google", "cached_google", "internal"] = "internal"
+    search_source_label: str | None = None
+    is_live_result: bool = False
 
 
 class PlaceSearchOut(BaseModel):
     items: list[PlaceSearchItemOut]
     sort_by: SearchSortBy = "relevance"
     google_results_used: bool = False
+    live_search_attempted: bool = False
+    live_search_succeeded: bool = False
+    live_result_count: int = 0
+    status_message: str | None = None
 
 
 class ReviewCreate(BaseModel):
@@ -230,6 +250,11 @@ class RecommendationItem(BaseModel):
     place_id: str
     name: str
     price_level: int | None
+    formatted_address: str | None = None
+    source: PlaceSource
+    google_rating: float | None = None
+    google_user_ratings_total: int | None = None
+    is_cached_from_external: bool = False
     lat: float
     lng: float
     distance_km: float

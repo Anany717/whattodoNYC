@@ -86,6 +86,15 @@ Seed highlights:
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/supabase_schema.sql
 ```
 
+If you already had an older database/schema, re-apply the schema or add the new `places` columns before testing live search:
+- `google_primary_type`
+- `google_rating`
+- `google_user_ratings_total`
+- `external_last_synced_at`
+- `external_raw_json`
+- `is_seed_data`
+- `is_cached_from_external`
+
 ## Frontend Routes
 
 Public:
@@ -160,9 +169,14 @@ Route behavior:
 - `POST /recommendations`
 
 ## Search Behavior
-- Internal places are searched first.
-- If local matches are too thin and a location-aware keyword search is provided, the backend queries Google Places.
-- Google results are normalized into the internal place shape, cached in the database, and deduplicated against near-identical existing places.
+- Keyword searches now attempt live Google Places first.
+- Live Google results are normalized into the internal place shape, cached in the database, and deduplicated against near-identical existing places.
+- Local places are still used for enrichment, fallback, reviews, authenticity, promotions, and saved-list continuity.
+- Search responses now tell the frontend whether:
+  - live search was attempted
+  - live search succeeded
+  - live Google matches were used
+- Places store richer external metadata, including Google ratings and last sync time, so cached results still feel dynamic after the first fetch.
 - Search supports:
   - `relevance`
   - `price_asc`
@@ -216,5 +230,7 @@ npm run build
 
 ## Notes
 - Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in `frontend/.env.local` to enable map markers.
-- Set `GOOGLE_PLACES_API_KEY` and `ACCUWEATHER_API_KEY` in `backend/.env` to enable external enrichment.
+- Set `GOOGLE_PLACES_API_KEY` in `backend/.env` to enable live Google-backed search.
+- Set `ACCUWEATHER_API_KEY` in `backend/.env` to enable live weather enrichment.
+- If `GOOGLE_PLACES_API_KEY` is missing or Google is temporarily unavailable, the app falls back to cached/local results without crashing.
 - No secrets should be committed.

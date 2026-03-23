@@ -24,12 +24,31 @@ export default function PlaceCard({ place, subtitle, actions }: Props) {
       : null;
   const reviewCountValue =
     "review_count" in place && typeof place.review_count === "number" ? place.review_count : null;
+  const googleRating =
+    "google_rating" in place && typeof place.google_rating === "number" ? place.google_rating : null;
+  const googleRatingsCount =
+    "google_user_ratings_total" in place && typeof place.google_user_ratings_total === "number"
+      ? place.google_user_ratings_total
+      : null;
+  const sourceLabel =
+    "search_source_label" in place && place.search_source_label
+      ? place.search_source_label
+      : "source" in place && place.is_cached_from_external
+        ? place.source === "google"
+          ? "Google-sourced place"
+          : "Externally refreshed"
+        : null;
 
   return (
     <article className="card p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-display text-lg font-semibold text-slate-900">{place.name}</h3>
+          {sourceLabel ? (
+            <p className="mt-1 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand-700">
+              {sourceLabel}
+            </p>
+          ) : null}
           {hasAddress && place.formatted_address ? (
             <p className="mt-1 text-sm text-slate-600">{place.formatted_address}</p>
           ) : null}
@@ -52,6 +71,9 @@ export default function PlaceCard({ place, subtitle, actions }: Props) {
       {averageRating !== null || authenticityValue !== null || reviewCountValue !== null ? (
         <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-600">
           {averageRating !== null ? <span>Rating {averageRating.toFixed(1)}/5</span> : null}
+          {googleRating !== null && reviewCountValue === 0 ? (
+            <span>Google {googleRating.toFixed(1)}/5{googleRatingsCount ? ` (${googleRatingsCount.toLocaleString()})` : ""}</span>
+          ) : null}
           {authenticityValue !== null ? <span>Authenticity {(authenticityValue * 100).toFixed(0)}%</span> : null}
           {reviewCountValue !== null ? <span>{reviewCountValue} reviews</span> : null}
         </div>

@@ -24,6 +24,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
+# SQLAlchemy on our Python 3.9 runtime still needs `Optional[...]` here.
+# ruff: noqa: UP007
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -67,10 +70,18 @@ class User(Base):
         nullable=False,
         default=UserRole.customer,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
 
     reviews = relationship("Review", back_populates="user", cascade="all, delete-orphan")
-    authenticity_votes = relationship("AuthenticityVote", back_populates="user", cascade="all, delete-orphan")
+    authenticity_votes = relationship(
+        "AuthenticityVote",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     saved_lists = relationship("SavedList", back_populates="user", cascade="all, delete-orphan")
 
 
@@ -79,6 +90,9 @@ class Place(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     google_place_id: Mapped[Optional[str]] = mapped_column(Text, unique=True, nullable=True)
+    google_primary_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    google_rating: Mapped[Optional[float]] = mapped_column(nullable=True)
+    google_user_ratings_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source: Mapped[PlaceSource] = mapped_column(
         Enum(PlaceSource, native_enum=False, values_callable=enum_values),
         nullable=False,
@@ -96,10 +110,21 @@ class Place(Base):
     price_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     phone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     website: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    external_last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    external_raw_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    is_seed_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_cached_from_external: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     managed_by_user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=utcnow,
@@ -108,15 +133,26 @@ class Place(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("price_level IS NULL OR (price_level >= 1 AND price_level <= 4)", name="price_level_range"),
+        CheckConstraint(
+            "price_level IS NULL OR (price_level >= 1 AND price_level <= 4)",
+            name="price_level_range",
+        ),
     )
 
     hours = relationship("PlaceHour", back_populates="place", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="place", cascade="all, delete-orphan")
-    authenticity_votes = relationship("AuthenticityVote", back_populates="place", cascade="all, delete-orphan")
+    authenticity_votes = relationship(
+        "AuthenticityVote",
+        back_populates="place",
+        cascade="all, delete-orphan",
+    )
     tags = relationship("PlaceTag", back_populates="place", cascade="all, delete-orphan")
     promotions = relationship("Promotion", back_populates="place", cascade="all, delete-orphan")
-    saved_list_items = relationship("SavedListItem", back_populates="place", cascade="all, delete-orphan")
+    saved_list_items = relationship(
+        "SavedListItem",
+        back_populates="place",
+        cascade="all, delete-orphan",
+    )
 
 
 class PlaceHour(Base):
@@ -145,14 +181,27 @@ class Review(Base):
     rating_vibe: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     rating_groupfit: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "place_id", name="uq_review_user_place"),
         CheckConstraint("rating_overall BETWEEN 1 AND 5", name="rating_overall_range"),
-        CheckConstraint("rating_value IS NULL OR rating_value BETWEEN 1 AND 5", name="rating_value_range"),
-        CheckConstraint("rating_vibe IS NULL OR rating_vibe BETWEEN 1 AND 5", name="rating_vibe_range"),
-        CheckConstraint("rating_groupfit IS NULL OR rating_groupfit BETWEEN 1 AND 5", name="rating_groupfit_range"),
+        CheckConstraint(
+            "rating_value IS NULL OR rating_value BETWEEN 1 AND 5",
+            name="rating_value_range",
+        ),
+        CheckConstraint(
+            "rating_vibe IS NULL OR rating_vibe BETWEEN 1 AND 5",
+            name="rating_vibe_range",
+        ),
+        CheckConstraint(
+            "rating_groupfit IS NULL OR rating_groupfit BETWEEN 1 AND 5",
+            name="rating_groupfit_range",
+        ),
     )
 
     user = relationship("User", back_populates="reviews")
@@ -169,7 +218,11 @@ class AuthenticityVote(Base):
         Enum(AuthenticityLabel, native_enum=False, values_callable=enum_values),
         nullable=False,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
 
     __table_args__ = (UniqueConstraint("user_id", "place_id", name="uq_auth_vote_user_place"),)
 
@@ -207,7 +260,11 @@ class Promotion(Base):
     boost_factor: Mapped[float] = mapped_column(Numeric(3, 2), nullable=False)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
 
     __table_args__ = (
         CheckConstraint("boost_factor >= 1.00 AND boost_factor <= 3.00", name="boost_factor_range"),
@@ -222,7 +279,11 @@ class WeatherSnapshot(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     lat_bucket: Mapped[float] = mapped_column(nullable=False)
     lng_bucket: Mapped[float] = mapped_column(nullable=False)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
     data_json: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
@@ -232,7 +293,11 @@ class SavedList(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
 
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_saved_list_user_name"),)
 
@@ -245,7 +310,11 @@ class SavedListItem(Base):
 
     list_id: Mapped[str] = mapped_column(String(36), ForeignKey("saved_lists.id"), primary_key=True)
     place_id: Mapped[str] = mapped_column(String(36), ForeignKey("places.id"), primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        nullable=False,
+    )
 
     saved_list = relationship("SavedList", back_populates="items")
     place = relationship("Place", back_populates="saved_list_items")

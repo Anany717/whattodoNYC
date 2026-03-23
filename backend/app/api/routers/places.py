@@ -37,7 +37,7 @@ def search_places(
     sort_by: SearchSortBy = Query(default="relevance"),
     db: Session = Depends(get_db),
 ) -> PlaceSearchOut:
-    matches, google_results_used = run_place_search(
+    search_run = run_place_search(
         db,
         query=query,
         lat=lat,
@@ -58,10 +58,21 @@ def search_places(
             review_count=match.review_count,
             relevance_score=match.relevance_score,
             match_summary=match.match_summary,
+            search_source=match.search_source,
+            search_source_label=match.search_source_label,
+            is_live_result=match.is_live_result,
         )
-        for match in matches
+        for match in search_run.matches
     ]
-    return PlaceSearchOut(items=items, sort_by=sort_by, google_results_used=google_results_used)
+    return PlaceSearchOut(
+        items=items,
+        sort_by=sort_by,
+        google_results_used=search_run.google_results_used,
+        live_search_attempted=search_run.live_search_attempted,
+        live_search_succeeded=search_run.live_search_succeeded,
+        live_result_count=search_run.live_result_count,
+        status_message=search_run.status_message,
+    )
 
 
 @router.get("/places/{place_id}", response_model=PlaceDetailOut)
@@ -81,6 +92,10 @@ def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceDetailOut:
     tags = [place_tag.tag.name for place_tag in place.tags if place_tag.tag]
     return PlaceDetailOut(
         id=place.id,
+        google_place_id=place.google_place_id,
+        google_primary_type=place.google_primary_type,
+        google_rating=place.google_rating,
+        google_user_ratings_total=place.google_user_ratings_total,
         name=place.name,
         formatted_address=place.formatted_address,
         neighborhood=place.neighborhood,
@@ -90,6 +105,9 @@ def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceDetailOut:
         website=place.website,
         lat=place.lat,
         lng=place.lng,
+        external_last_synced_at=place.external_last_synced_at,
+        is_seed_data=place.is_seed_data,
+        is_cached_from_external=place.is_cached_from_external,
         tags=tags,
         average_rating=average_rating(place),
         authenticity_score=authenticity_score(place),

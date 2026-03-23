@@ -1,5 +1,6 @@
 from app.core.database import SessionLocal
 from app.models import Place, PlaceSource, PlaceTag, PlaceType, Review, Tag, User, UserRole
+from app.services.google_places import GooglePlacesFetchResult
 
 
 def _tag(db, name: str) -> Tag:
@@ -169,3 +170,88 @@ def test_search_sorting_supports_price_rating_and_distance(client):
     )
     assert distance_search.status_code == 200
     assert distance_search.json()["items"][0]["name"] == "Closest Pizza Slice"
+
+
+def test_search_attempts_live_google_even_when_internal_matches_exist(client, monkeypatch):
+    _seed_search_places()
+    call_log = {"count": 0}
+
+    def fake_google_search(db, *, query, lat, lng, radius_km, limit):
+        call_log["count"] += 1
+        live_place = Place(
+            google_place_id="google-live-thai-1",
+            google_primary_type="restaurant",
+            google_rating=4.7,
+            google_user_ratings_total=820,
+            source=PlaceSource.google,
+            place_type=PlaceType.restaurant,
+            name="Live East Village Thai Kitchen",
+            formatted_address="99 2nd Ave, New York, NY",
+            neighborhood="East Village",
+            lat=40.7274,
+            lng=-73.9871,
+            price_level=2,
+            is_cached_from_external=True,
+        )
+        db.add(live_place)
+        db.flush()
+        return GooglePlacesFetchResult(
+            places=[live_place], attempted=True, succeeded=True, error=None
+        )
+
+    monkeypatch.setattr(
+        "app.services.search_service.fetch_and_cache_google_places", fake_google_search
+    )
+
+    response = client.get(
+        "/places/search",
+        params={
+            "query": "thai east village",
+            "lat": 40.728,
+            "lng": -73.986,
+            "radius_km": 5,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert call_log["count"] == 1
+    assert payload["live_search_attempted"] is True
+    assert payload["live_search_succeeded"] is True
+    assert payload["live_result_count"] == 1
+    assert any(item["search_source"] == "live_google" for item in payload["items"])
+    assert any(item["name"] == "Live East Village Thai Kitchen" for item in payload["items"])
+
+
+def test_search_falls_back_cleanly_when_google_search_fails(client, monkeypatch):
+    _, restaurant_place_id, _ = _seed_search_places()
+
+    def fake_google_failure(db, *, query, lat, lng, radius_km, limit):
+        return GooglePlacesFetchResult(
+            places=[],
+            attempted=True,
+            succeeded=False,
+            error="temporary outage",
+        )
+
+    monkeypatch.setattr(
+        "app.services.search_service.fetch_and_cache_google_places", fake_google_failure
+    )
+
+    response = client.get(
+        "/places/search",
+        params={
+            "query": "thai astoria",
+            "lat": 40.7616,
+            "lng": -73.9256,
+            "radius_km": 5,
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["google_results_used"] is False
+    assert payload["live_search_attempted"] is True
+    assert payload["live_search_succeeded"] is False
+    assert "Showing cached/local results instead" in (payload["status_message"] or "")
+    assert payload["items"][0]["id"] == restaurant_place_id
