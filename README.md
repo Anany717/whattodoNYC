@@ -20,7 +20,8 @@ This repo now includes the next milestone features:
 ## Project Structure
 - `backend/` FastAPI app, routers, services, tests, seed script
 - `frontend/` Next.js app, components, auth/API utilities
-- `backend/sql/supabase_schema.sql` Supabase-compatible schema
+- `backend/sql/supabase_schema.sql` fresh Supabase/Postgres schema
+- `backend/sql/upgrades/` incremental upgrade SQL for existing databases
 - `PLAN.md` milestone implementation plan and status
 
 ## Environment Setup
@@ -80,13 +81,24 @@ Seed highlights:
   - `admin@whattodonyc.local`
   - `AdminDemo123!`
 
-## Optional: Apply Supabase Schema
+## Database Schema
+
+### Fresh Supabase / Postgres Setup
 
 ```bash
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/supabase_schema.sql
 ```
 
-If you already had an older database/schema, re-apply the schema or add the new `places` columns before testing live search:
+### Upgrade Existing Supabase / Postgres Database
+
+Run these in order:
+
+```bash
+psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_23_01_add_internal_place_source.sql
+psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_23_02_live_search_schema.sql
+```
+
+This upgrade path adds the live-search metadata used by the current app:
 - `google_primary_type`
 - `google_rating`
 - `google_user_ratings_total`
@@ -94,6 +106,20 @@ If you already had an older database/schema, re-apply the schema or add the new 
 - `external_raw_json`
 - `is_seed_data`
 - `is_cached_from_external`
+
+It only alters the existing `places` table and adds supporting indexes, so it is safe for a database that already has the original project tables.
+
+### Local SQLite Demo Database
+
+Local SQLite is good for fast development, but it will not auto-migrate older files.
+If your local `whattodo.db` is behind the current model shape, reset and reseed it:
+
+```bash
+cd backend
+mv whattodo.db whattodo.db.bak 2>/dev/null || true
+source .venv/bin/activate
+python -m scripts.seed
+```
 
 ## Frontend Routes
 

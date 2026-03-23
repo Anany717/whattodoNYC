@@ -63,6 +63,7 @@ Status: completed for this update.
   - SQLAlchemy model
   - Pydantic schemas
   - Supabase schema SQL
+  - dedicated Postgres upgrade SQL for existing databases
   - seed logic
   - frontend types
 

@@ -1,119 +1,210 @@
--- WhatToDo NYC Supabase schema (Postgres)
-create extension if not exists pgcrypto;
+-- =========================================================
+-- WhatToDo NYC: Supabase / PostgreSQL Schema
+-- Fresh database setup
+-- =========================================================
 
-create type user_role as enum ('customer','reviewer','seller','admin');
-create type place_source as enum ('google','internal');
-create type place_type as enum ('restaurant','event','activity');
-create type authenticity_label as enum ('authentic','touristy');
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-create table if not exists users (
-  id uuid primary key default gen_random_uuid(),
-  full_name text not null,
-  email text not null unique,
-  password_hash text not null,
-  role user_role not null,
-  created_at timestamptz not null default now()
+-- -------------------------
+-- ENUM TYPES
+-- -------------------------
+DO $$
+BEGIN
+  CREATE TYPE user_role AS ENUM ('customer', 'reviewer', 'seller', 'admin');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE TYPE place_source AS ENUM ('google', 'internal');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE TYPE place_type AS ENUM ('restaurant', 'event', 'activity');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE TYPE authenticity_label AS ENUM ('authentic', 'touristy');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- -------------------------
+-- USERS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role user_role NOT NULL DEFAULT 'customer',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-create table if not exists places (
-  id uuid primary key default gen_random_uuid(),
-  google_place_id text unique,
-  google_primary_type text,
-  google_rating double precision,
-  google_user_ratings_total integer,
-  source place_source not null,
-  place_type place_type not null,
-  name text not null,
-  formatted_address text,
-  neighborhood text,
-  lat double precision not null,
-  lng double precision not null,
-  price_level integer check (price_level between 1 and 4),
-  phone text,
-  website text,
-  external_last_synced_at timestamptz,
-  external_raw_json jsonb,
-  is_seed_data boolean not null default false,
-  is_cached_from_external boolean not null default false,
-  managed_by_user_id uuid references users(id),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+-- -------------------------
+-- PLACES
+-- -------------------------
+CREATE TABLE IF NOT EXISTS places (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  google_place_id TEXT UNIQUE,
+  google_primary_type TEXT,
+  google_rating DOUBLE PRECISION,
+  google_user_ratings_total INTEGER,
+  source place_source NOT NULL DEFAULT 'internal',
+  place_type place_type NOT NULL DEFAULT 'restaurant',
+  name TEXT NOT NULL,
+  formatted_address TEXT,
+  neighborhood TEXT,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  price_level INTEGER CHECK (price_level BETWEEN 1 AND 4),
+  phone TEXT,
+  website TEXT,
+  external_last_synced_at TIMESTAMPTZ,
+  external_raw_json JSONB,
+  is_seed_data BOOLEAN NOT NULL DEFAULT false,
+  is_cached_from_external BOOLEAN NOT NULL DEFAULT false,
+  managed_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-create table if not exists place_hours (
-  id uuid primary key default gen_random_uuid(),
-  place_id uuid not null references places(id) on delete cascade,
-  day_of_week smallint not null check (day_of_week between 0 and 6),
-  open_time time,
-  close_time time,
-  is_closed boolean not null default false,
-  unique(place_id, day_of_week)
+CREATE INDEX IF NOT EXISTS idx_places_type ON places(place_type);
+CREATE INDEX IF NOT EXISTS idx_places_neighborhood ON places(neighborhood);
+CREATE INDEX IF NOT EXISTS idx_places_lat_lng ON places(lat, lng);
+CREATE INDEX IF NOT EXISTS idx_places_source ON places(source);
+CREATE INDEX IF NOT EXISTS idx_places_external_last_synced_at ON places(external_last_synced_at);
+
+-- -------------------------
+-- PLACE HOURS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS place_hours (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  open_time TIME,
+  close_time TIME,
+  is_closed BOOLEAN NOT NULL DEFAULT false,
+  CONSTRAINT closed_requires_null_times CHECK (
+    (is_closed = true AND open_time IS NULL AND close_time IS NULL)
+    OR (is_closed = false)
+  )
 );
 
-create table if not exists reviews (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  place_id uuid not null references places(id) on delete cascade,
-  rating_overall smallint not null check (rating_overall between 1 and 5),
-  rating_value smallint check (rating_value between 1 and 5),
-  rating_vibe smallint check (rating_vibe between 1 and 5),
-  rating_groupfit smallint check (rating_groupfit between 1 and 5),
-  comment text,
-  created_at timestamptz not null default now(),
-  unique(user_id, place_id)
+CREATE INDEX IF NOT EXISTS idx_place_hours_place_id ON place_hours(place_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_place_hours_place_day ON place_hours(place_id, day_of_week);
+
+-- -------------------------
+-- REVIEWS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  rating_overall SMALLINT NOT NULL CHECK (rating_overall BETWEEN 1 AND 5),
+  rating_value SMALLINT CHECK (rating_value BETWEEN 1 AND 5),
+  rating_vibe SMALLINT CHECK (rating_vibe BETWEEN 1 AND 5),
+  rating_groupfit SMALLINT CHECK (rating_groupfit BETWEEN 1 AND 5),
+  comment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-create table if not exists authenticity_votes (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  place_id uuid not null references places(id) on delete cascade,
-  label authenticity_label not null,
-  created_at timestamptz not null default now(),
-  unique(user_id, place_id)
+CREATE INDEX IF NOT EXISTS idx_reviews_place_id ON reviews(place_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_user_place ON reviews(user_id, place_id);
+
+-- -------------------------
+-- AUTHENTICITY VOTES
+-- -------------------------
+CREATE TABLE IF NOT EXISTS authenticity_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  label authenticity_label NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-create table if not exists tags (
-  id uuid primary key default gen_random_uuid(),
-  name text not null unique
+CREATE INDEX IF NOT EXISTS idx_auth_votes_place_id ON authenticity_votes(place_id);
+CREATE INDEX IF NOT EXISTS idx_auth_votes_user_id ON authenticity_votes(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_votes_user_place ON authenticity_votes(user_id, place_id);
+
+-- -------------------------
+-- TAGS + PLACE TAGS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE
 );
 
-create table if not exists place_tags (
-  place_id uuid not null references places(id) on delete cascade,
-  tag_id uuid not null references tags(id) on delete cascade,
-  primary key(place_id, tag_id)
+CREATE TABLE IF NOT EXISTS place_tags (
+  place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (place_id, tag_id)
 );
 
-create table if not exists promotions (
-  id uuid primary key default gen_random_uuid(),
-  place_id uuid not null references places(id) on delete cascade,
-  seller_user_id uuid not null references users(id) on delete cascade,
-  title text not null,
-  description text,
-  boost_factor numeric(3,2) not null check (boost_factor >= 1.00 and boost_factor <= 3.00),
-  start_at timestamptz not null,
-  end_at timestamptz not null,
-  created_at timestamptz not null default now()
+CREATE INDEX IF NOT EXISTS idx_place_tags_place_id ON place_tags(place_id);
+CREATE INDEX IF NOT EXISTS idx_place_tags_tag_id ON place_tags(tag_id);
+
+-- -------------------------
+-- PROMOTIONS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS promotions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  seller_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  boost_factor NUMERIC(3,2) NOT NULL DEFAULT 1.00
+    CHECK (boost_factor >= 1.00 AND boost_factor <= 3.00),
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT promo_time_valid CHECK (end_at > start_at)
 );
 
-create table if not exists weather_snapshots (
-  id uuid primary key default gen_random_uuid(),
-  lat_bucket double precision not null,
-  lng_bucket double precision not null,
-  fetched_at timestamptz not null default now(),
-  data_json jsonb not null
+CREATE INDEX IF NOT EXISTS idx_promotions_place_id ON promotions(place_id);
+CREATE INDEX IF NOT EXISTS idx_promotions_seller_id ON promotions(seller_user_id);
+CREATE INDEX IF NOT EXISTS idx_promotions_active ON promotions(start_at, end_at);
+
+-- -------------------------
+-- WEATHER SNAPSHOTS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS weather_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lat_bucket DOUBLE PRECISION NOT NULL,
+  lng_bucket DOUBLE PRECISION NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  data_json JSONB NOT NULL
 );
 
-create table if not exists saved_lists (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  name text not null,
-  created_at timestamptz not null default now(),
-  unique(user_id, name)
+CREATE INDEX IF NOT EXISTS idx_weather_bucket ON weather_snapshots(lat_bucket, lng_bucket);
+CREATE INDEX IF NOT EXISTS idx_weather_fetched_at ON weather_snapshots(fetched_at);
+
+-- -------------------------
+-- SAVED LISTS
+-- -------------------------
+CREATE TABLE IF NOT EXISTS saved_lists (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-create table if not exists saved_list_items (
-  list_id uuid not null references saved_lists(id) on delete cascade,
-  place_id uuid not null references places(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key(list_id, place_id)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_lists_user_name ON saved_lists(user_id, name);
+
+CREATE TABLE IF NOT EXISTS saved_list_items (
+  list_id UUID NOT NULL REFERENCES saved_lists(id) ON DELETE CASCADE,
+  place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (list_id, place_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_saved_items_place_id ON saved_list_items(place_id);
+CREATE INDEX IF NOT EXISTS idx_saved_items_list_id ON saved_list_items(list_id);
