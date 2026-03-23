@@ -1,74 +1,52 @@
-# WhatToDo NYC Milestone Plan
+# WhatToDo NYC Upgrade Plan
 
-## Phase 1: Audit + Alignment (Completed)
-- Confirmed backend already had core auth/place/review/authenticity/saved-list/promotions routes.
-- Confirmed frontend had landing/results/map/login/register and needed milestone expansion.
-- Identified gaps: place detail, profile/dashboard experiences, protected/role routes, and missing backend user/seller/admin endpoints.
+Status: completed for this phase. Backend and frontend are now aligned with the upgraded search, profile, review, and saved-list flows.
 
-## Phase 2: Backend API Completion (Completed)
-- Added `PUT /reviews/{id}`.
-- Added profile/user endpoints: `GET /users/me`, `PUT /users/me`, `GET /users/me/reviews`.
-- Added role scaffold endpoints:
-  - `GET /seller/places`
-  - `GET /seller/promotions`
-  - `GET /admin/users`
-  - `GET /admin/places`
-- Added `DELETE /saved-lists/{id}/items/{place_id}`.
-- Expanded `GET /places/{id}` response with tags, average rating, authenticity score, and review count.
+## Phase 1: Audit Findings
+- Existing auth, recommendations, place detail, reviews, authenticity, saved-list, seller, and admin scaffolding are already in place.
+- Current saved-place UX already uses heart/bookmark controls and should be preserved.
+- Search currently works for local data and has a basic Google Places fallback, but it is still route-centric, lacks a dedicated search service, and does not support `sort_by`.
+- Google Places integration currently only performs a simple text search call and caches unseen places by `google_place_id`; error handling is safe but normalization and merge/dedupe logic need to be stronger.
+- Recommendations already incorporate reviews, authenticity, distance, weather, and promotions, but keyword relevance is not yet dominant enough.
+- Missing or incomplete backend endpoints for this phase:
+  - `GET /users/me/saved-lists`
+  - `GET /saved-lists/{id}`
+  - `DELETE /reviews/{id}`
+  - `GET /admin/reviews`
+- Frontend currently has `/`, `/results`, `/places/[id]`, `/profile`, `/saved-lists`, seller/admin dashboards, and protected route handling, but it still needs:
+  - a stronger homepage/search flow with sorting
+  - dedicated `/search`
+  - saved-list detail page
+  - tighter integration with updated search/sort backend responses
 
-## Phase 3: Shared Frontend Utilities + Components (Completed)
-- Expanded `frontend/lib/types.ts` for role-aware and page-specific data types.
-- Expanded `frontend/lib/api.ts` for all milestone endpoints.
-- Added `frontend/lib/auth.ts` for token storage, current-user loading, and role checks.
-- Added reusable components:
-  - `Navbar`
-  - `ProtectedRoute`
-  - `PlaceCard`
-  - `ReviewCard`
-  - `ReviewForm`
-  - `ProfileHeader`
-  - `RoleBadge`
-  - `SavedListCard`
-  - `SellerStatsCard`
-  - `EmptyState`
+## Phase 2: Backend Core
+- Add a dedicated search service for filtering, ranking, dedupe, and sorting.
+- Strengthen Google Places fetch + normalization + caching behavior.
+- Add `sort_by` support to `/places/search`.
+- Expand place detail support through consistent aggregates and related route coverage.
+- Complete reviews, saved-lists, profile, and admin endpoints.
 
-## Phase 4: Place Detail + Reviews UX (Completed)
-- Added `app/places/[id]/page.tsx`.
-- Implemented place info, ratings/authenticity summary, active promotions, and reviews list.
-- Implemented logged-in actions:
-  - Write or edit review
-  - Vote authentic/touristy
-  - Save place to a list
+## Phase 3: Data Alignment
+- Keep the current schema unless implementation proves a schema change is necessary.
+- Update Pydantic schemas, frontend types, seed assumptions, and README to reflect any API shape changes.
 
-## Phase 5: Profile + Saved Lists + Dashboards (Completed)
-- Added `app/profile/page.tsx` with account details, role badge, profile edit form, reviews, and saved lists.
-- Added `app/saved-lists/page.tsx` with create/add/remove list item flows.
-- Added `app/dashboard/page.tsx` as role-aware dashboard hub.
-- Added `app/seller/dashboard/page.tsx` with managed places, promotions, stats, and promotion creation form.
-- Added `app/admin/dashboard/page.tsx` scaffold with aggregate stats and list placeholders.
+## Phase 4: Frontend Foundation
+- Update shared API utilities and types for new search and profile/list endpoints.
+- Add shared search/sort components where needed.
+- Preserve the existing navbar, protected-route logic, and favorites/list save UX.
 
-## Phase 6: Navigation + Route Protection + Home Flow (Completed)
-- Replaced static header with role-aware `Navbar`.
-- Added protected route handling for:
-  - `/profile`
-  - `/dashboard`
-  - `/saved-lists`
-  - `/seller/dashboard`
-  - `/admin/dashboard`
-- Enforced role-based access deny behavior for seller/admin sections.
-- Refreshed homepage hero + search flow.
+## Phase 5: Frontend Pages
+- Upgrade homepage into a stronger search landing experience.
+- Add `/search` and `/saved-lists/[id]`.
+- Improve `/places/[id]`, `/profile`, seller/admin dashboards, and saved-lists flows with the real backend data.
 
-## Phase 7: End-to-End Validation (Completed)
-- Validated build + runtime integration paths in code for:
-  - register -> login -> profile
-  - place detail -> review create/update -> review list refresh
-  - authenticity vote -> summary refresh
-  - saved list add/remove flows
-  - seller dashboard data + promotion creation
-  - role-protected route behavior
+## Phase 6: Integration + QA
+- Validate search -> place detail -> save/review flows.
+- Validate profile + saved-lists + role dashboards.
+- Run backend tests, frontend lint/build, and update README with current behavior.
 
-## Phase 8: Polish + Documentation (Completed)
-- Unified UI into a neutral, card-based, consistent layout.
-- Removed developer-facing strings from key user pages.
-- Ran backend tests + frontend lint/build and resolved issues.
-- Updated README with setup, routes, role matrix, and demo checklist.
+## Validation Completed
+- Backend tests: `pytest tests` -> passing (`6 passed`)
+- Backend scoped Ruff on changed files -> passing
+- Frontend lint: `npm run lint` -> passing
+- Frontend production build: `npm run build` -> passing

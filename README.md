@@ -8,6 +8,8 @@ This repo now includes the next milestone features:
 - Seller dashboard + promotion creation
 - Admin dashboard scaffold
 - Role-based protected frontend routes and backend RBAC endpoints
+- Keyword-first search with sort options and Google Places fallback/cache
+- Saved-list favorites/bookmark UX and saved-list detail pages
 
 ## Stack
 - Frontend: Next.js App Router + Tailwind CSS
@@ -61,13 +63,22 @@ npm run dev
 
 Open: `http://localhost:3000`
 
-## Optional: Seed 10 NYC Places
+## Optional: Seed Demo Data
 
 ```bash
 cd ~/Desktop/CAPSTONE/backend
 source .venv/bin/activate
 python -m scripts.seed
 ```
+
+Seed highlights:
+- 50 demo places total
+- 30 restaurants
+- 10 events
+- 10 activities
+- seeded demo admin login:
+  - `admin@whattodonyc.local`
+  - `AdminDemo123!`
 
 ## Optional: Apply Supabase Schema
 
@@ -81,6 +92,7 @@ Public:
 - `/`
 - `/login`
 - `/register`
+- `/search`
 - `/places/[id]`
 - `/results`
 - `/map`
@@ -89,7 +101,8 @@ Protected:
 - `/profile`
 - `/dashboard`
 - `/saved-lists`
-- `/seller/dashboard` (seller only)
+- `/saved-lists/[id]`
+- `/seller/dashboard` (seller/admin)
 - `/admin/dashboard` (admin only)
 
 Route behavior:
@@ -107,6 +120,7 @@ Route behavior:
 - `GET /users/me`
 - `PUT /users/me`
 - `GET /users/me/reviews`
+- `GET /users/me/saved-lists`
 
 ### Places
 - `GET /places/{id}`
@@ -120,6 +134,7 @@ Route behavior:
 ### Reviews
 - `POST /reviews` (upsert by user/place)
 - `PUT /reviews/{id}`
+- `DELETE /reviews/{id}`
 
 ### Authenticity
 - `POST /authenticity/vote` (upsert by user/place)
@@ -127,6 +142,7 @@ Route behavior:
 ### Saved Lists
 - `POST /saved-lists`
 - `GET /saved-lists`
+- `GET /saved-lists/{id}`
 - `POST /saved-lists/{id}/items`
 - `DELETE /saved-lists/{id}/items/{place_id}`
 
@@ -138,21 +154,39 @@ Route behavior:
 ### Admin (scaffold)
 - `GET /admin/users`
 - `GET /admin/places`
+- `GET /admin/reviews`
 
 ### Recommendations
 - `POST /recommendations`
 
+## Search Behavior
+- Internal places are searched first.
+- If local matches are too thin and a location-aware keyword search is provided, the backend queries Google Places.
+- Google results are normalized into the internal place shape, cached in the database, and deduplicated against near-identical existing places.
+- Search supports:
+  - `relevance`
+  - `price_asc`
+  - `price_desc`
+  - `rating_desc`
+  - `distance_asc`
+  - `authenticity_desc`
+- Keyword relevance is the strongest ranking factor in both `/places/search` and `/recommendations`.
+
 ## Demo Flows
 1. Register and login (`customer` or `reviewer`).
-2. Open `/profile` and verify account info + reviews + saved lists preview.
+2. Open `/search`, run a keyword search, and verify:
+   - recommendation cards
+   - sorted search results
+   - saved heart/bookmark actions
 3. Open `/places/{id}` and:
    - submit or edit a review
    - vote authentic/touristy
    - save place
-4. Open `/saved-lists` and verify list/item state updates.
-5. Login as `seller` and use `/seller/dashboard` to create a promotion.
-6. Login as `admin` and open `/admin/dashboard`.
-7. Verify unauthorized access behavior for seller/admin pages.
+4. Open `/saved-lists` and `/saved-lists/{id}` and verify list/item state updates.
+5. Open `/profile` and verify account info + reviews + saved lists + saved places preview.
+6. Login as `seller` and use `/seller/dashboard` to create a place and then a promotion.
+7. Login as `admin` and open `/admin/dashboard`.
+8. Verify unauthorized access behavior for seller/admin pages.
 
 ## Quality Checks
 
@@ -162,6 +196,14 @@ Backend tests:
 cd backend
 source .venv/bin/activate
 pytest tests
+```
+
+Backend Ruff on changed files:
+
+```bash
+cd backend
+source .venv/bin/activate
+ruff check app/api/routers/admin.py app/api/routers/places.py app/api/routers/promotions.py app/api/routers/reviews.py app/api/routers/saved_lists.py app/api/routers/seller.py app/api/routers/users.py app/schemas.py app/services/google_places.py app/services/place_metrics.py app/services/recommendations.py app/services/search_service.py tests/test_places_search.py tests/test_profile_saved_lists.py
 ```
 
 Frontend lint/build:

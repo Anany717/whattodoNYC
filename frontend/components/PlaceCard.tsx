@@ -1,8 +1,8 @@
 import Link from "next/link";
 
-import type { Place, PlaceDetail, RecommendationItem } from "@/lib/types";
+import type { Place, PlaceDetail, PlaceSearchItem, RecommendationItem } from "@/lib/types";
 
-type PlaceLike = Place | PlaceDetail | RecommendationItem;
+type PlaceLike = Place | PlaceDetail | PlaceSearchItem | RecommendationItem;
 
 type Props = {
   place: PlaceLike;
@@ -11,11 +11,19 @@ type Props = {
 };
 
 export default function PlaceCard({ place, subtitle, actions }: Props) {
-  const hasDistance = "distance_km" in place;
   const hasAddress = "formatted_address" in place;
   const hasType = "place_type" in place;
   const hasPrice = "price_level" in place;
   const placeLinkId = "place_id" in place ? place.place_id : place.id;
+  const distanceKm = "distance_km" in place && typeof place.distance_km === "number" ? place.distance_km : null;
+  const averageRating =
+    "average_rating" in place && typeof place.average_rating === "number" ? place.average_rating : null;
+  const authenticityValue =
+    "authenticity_score" in place && typeof place.authenticity_score === "number"
+      ? place.authenticity_score
+      : null;
+  const reviewCountValue =
+    "review_count" in place && typeof place.review_count === "number" ? place.review_count : null;
 
   return (
     <article className="card p-5">
@@ -35,9 +43,19 @@ export default function PlaceCard({ place, subtitle, actions }: Props) {
           {hasPrice && place.price_level ? (
             <p className="text-sm font-medium text-slate-700">{"$".repeat(place.price_level)}</p>
           ) : null}
-          {hasDistance ? <p className="text-xs text-slate-500">{place.distance_km.toFixed(2)} km</p> : null}
+          {distanceKm !== null ? (
+            <p className="text-xs text-slate-500">{distanceKm.toFixed(2)} km</p>
+          ) : null}
         </div>
       </div>
+
+      {averageRating !== null || authenticityValue !== null || reviewCountValue !== null ? (
+        <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-600">
+          {averageRating !== null ? <span>Rating {averageRating.toFixed(1)}/5</span> : null}
+          {authenticityValue !== null ? <span>Authenticity {(authenticityValue * 100).toFixed(0)}%</span> : null}
+          {reviewCountValue !== null ? <span>{reviewCountValue} reviews</span> : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <Link

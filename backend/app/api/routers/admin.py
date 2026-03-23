@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.core.database import get_db
-from app.models import Place, User, UserRole
-from app.schemas import PlaceOut, UserOut
+from app.models import Place, Review, User, UserRole
+from app.schemas import PlaceOut, ReviewOut, UserOut
 
 router = APIRouter()
 
@@ -26,3 +26,12 @@ def get_all_places(
 ) -> list[PlaceOut]:
     places = list(db.scalars(select(Place).order_by(Place.created_at.desc())).all())
     return [PlaceOut.model_validate(place) for place in places]
+
+
+@router.get("/admin/reviews", response_model=list[ReviewOut])
+def get_all_reviews(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.admin)),
+) -> list[ReviewOut]:
+    reviews = list(db.scalars(select(Review).order_by(Review.created_at.desc())).all())
+    return [ReviewOut.model_validate(review) for review in reviews]

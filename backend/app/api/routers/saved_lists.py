@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -9,6 +11,14 @@ from app.models import Place, SavedList, SavedListItem, User
 from app.schemas import SavedListCreate, SavedListItemCreate, SavedListOut
 
 router = APIRouter()
+
+
+def _load_saved_list(db: Session, list_id: str, user_id: str) -> Optional[SavedList]:
+    return db.scalar(
+        select(SavedList)
+        .where(SavedList.id == list_id, SavedList.user_id == user_id)
+        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
+    )
 
 
 @router.post("/saved-lists", response_model=SavedListOut)
@@ -23,7 +33,10 @@ def create_saved_list(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="List name already exists") from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="List name already exists",
+        ) from exc
     db.refresh(saved_list)
     return SavedListOut.model_validate(saved_list)
 
@@ -35,11 +48,7 @@ def add_saved_list_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SavedListOut:
-    saved_list = db.scalar(
-        select(SavedList)
-        .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
-        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
-    )
+    saved_list = _load_saved_list(db, list_id, current_user.id)
     if not saved_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved list not found")
 
@@ -54,11 +63,7 @@ def add_saved_list_item(
     except IntegrityError:
         db.rollback()
 
-    saved_list = db.scalar(
-        select(SavedList)
-        .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
-        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
-    )
+    saved_list = _load_saved_list(db, list_id, current_user.id)
     return SavedListOut.model_validate(saved_list)
 
 
@@ -69,26 +74,21 @@ def remove_saved_list_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SavedListOut:
-    saved_list = db.scalar(
-        select(SavedList)
-        .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
-        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
-    )
+    saved_list = _load_saved_list(db, list_id, current_user.id)
     if not saved_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved list not found")
 
     item = db.scalar(
-        select(SavedListItem).where(SavedListItem.list_id == list_id, SavedListItem.place_id == place_id)
+        select(SavedListItem).where(
+            SavedListItem.list_id == list_id,
+            SavedListItem.place_id == place_id,
+        )
     )
     if item:
         db.delete(item)
         db.commit()
 
-    saved_list = db.scalar(
-        select(SavedList)
-        .where(SavedList.id == list_id, SavedList.user_id == current_user.id)
-        .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
-    )
+    saved_list = _load_saved_list(db, list_id, current_user.id)
     return SavedListOut.model_validate(saved_list)
 
 
@@ -106,3 +106,15 @@ def get_my_saved_lists(
         ).all()
     )
     return [SavedListOut.model_validate(item) for item in lists]
+
+
+@router.get("/saved-lists/{list_id}", response_model=SavedListOut)
+def get_saved_list(
+    list_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SavedListOut:
+    saved_list = _load_saved_list(db, list_id, current_user.id)
+    if not saved_list:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved list not found")
+    return SavedListOut.model_validate(saved_list)

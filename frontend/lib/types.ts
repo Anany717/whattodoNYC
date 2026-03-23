@@ -1,5 +1,12 @@
 export type UserRole = "customer" | "reviewer" | "seller" | "admin";
 export type PlaceType = "restaurant" | "event" | "activity";
+export type SearchSortBy =
+  | "relevance"
+  | "price_asc"
+  | "price_desc"
+  | "rating_desc"
+  | "distance_asc"
+  | "authenticity_desc";
 
 export type User = {
   id: string;
@@ -28,6 +35,15 @@ export type Place = {
   phone: string | null;
   website: string | null;
   managed_by_user_id: string | null;
+};
+
+export type PlaceSearchItem = Place & {
+  distance_km: number | null;
+  average_rating: number | null;
+  authenticity_score: number;
+  review_count: number;
+  relevance_score: number;
+  match_summary: string | null;
 };
 
 export type PlaceDetail = {
@@ -160,5 +176,7 @@ export type RecommendationResponse = {
 };
 
 export type PlaceSearchResponse = {
-  items: Place[];
+  items: PlaceSearchItem[];
+  sort_by: SearchSortBy;
+  google_results_used: boolean;
 };

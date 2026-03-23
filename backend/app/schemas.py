@@ -87,8 +87,29 @@ class PlaceDetailOut(BaseModel):
     review_count: int = 0
 
 
+SearchSortBy = Literal[
+    "relevance",
+    "price_asc",
+    "price_desc",
+    "rating_desc",
+    "distance_asc",
+    "authenticity_desc",
+]
+
+
+class PlaceSearchItemOut(PlaceOut):
+    distance_km: float | None = None
+    average_rating: float | None = None
+    authenticity_score: float = 0.5
+    review_count: int = 0
+    relevance_score: float = 0.0
+    match_summary: str | None = None
+
+
 class PlaceSearchOut(BaseModel):
-    items: list[PlaceOut]
+    items: list[PlaceSearchItemOut]
+    sort_by: SearchSortBy = "relevance"
+    google_results_used: bool = False
 
 
 class ReviewCreate(BaseModel):

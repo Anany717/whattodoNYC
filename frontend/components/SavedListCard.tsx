@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { SavedList } from "@/lib/types";
 
 type Props = {
@@ -6,6 +8,8 @@ type Props = {
 };
 
 export default function SavedListCard({ list, onRemoveItem }: Props) {
+  const previewItems = list.items.slice(0, 3);
+
   return (
     <article className="card p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -14,7 +18,7 @@ export default function SavedListCard({ list, onRemoveItem }: Props) {
       </div>
 
       <div className="space-y-2">
-        {list.items.map((item) => (
+        {previewItems.map((item) => (
           <div key={`${item.list_id}-${item.place_id}`} className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-800">{item.place?.name || item.place_id}</p>
@@ -30,6 +34,17 @@ export default function SavedListCard({ list, onRemoveItem }: Props) {
             ) : null}
           </div>
         ))}
+      </div>
+
+      {list.items.length > previewItems.length ? (
+        <p className="mt-3 text-xs text-slate-500">+{list.items.length - previewItems.length} more saved places</p>
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">Created {new Date(list.created_at).toLocaleDateString()}</p>
+        <Link href={`/saved-lists/${list.id}`} className="btn-secondary px-3 py-2 text-sm">
+          View list
+        </Link>
       </div>
     </article>
   );

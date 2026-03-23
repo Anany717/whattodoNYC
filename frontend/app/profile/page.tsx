@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import EmptyState from "@/components/EmptyState";
+import PlaceCard from "@/components/PlaceCard";
 import ProfileHeader from "@/components/ProfileHeader";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ReviewCard from "@/components/ReviewCard";
 import SavedListCard from "@/components/SavedListCard";
-import { getMyReviews, getSavedLists, getUserProfile, updateUserProfile } from "@/lib/api";
+import { getMyReviews, getMySavedLists, getUserProfile, updateUserProfile } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import type { SavedList, User, UserReview } from "@/lib/types";
+import type { Place, SavedList, User, UserReview } from "@/lib/types";
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +23,17 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState("");
   const [passwordPlaceholder, setPasswordPlaceholder] = useState("");
 
+  const savedPlaces: Place[] = [];
+  const seenPlaceIds = new Set<string>();
+  savedLists.forEach((list) => {
+    list.items.forEach((item) => {
+      if (item.place && !seenPlaceIds.has(item.place.id)) {
+        seenPlaceIds.add(item.place.id);
+        savedPlaces.push(item.place);
+      }
+    });
+  });
+
   const loadData = async () => {
     const token = getToken();
     if (!token) return;
@@ -31,7 +43,7 @@ export default function ProfilePage() {
       const [profile, myReviews, lists] = await Promise.all([
         getUserProfile(token),
         getMyReviews(token),
-        getSavedLists(token)
+        getMySavedLists(token)
       ]);
       setUser(profile);
       setFullName(profile.full_name);
@@ -140,6 +152,17 @@ export default function ProfilePage() {
               savedLists.map((list) => <SavedListCard key={list.id} list={list} />)
             ) : (
               <EmptyState title="No saved lists" description="Create your first list from the saved lists page." />
+            )}
+          </div>
+        </section>
+
+        <section className="card p-6">
+          <h2 className="font-display text-xl font-semibold text-slate-900">Saved places preview</h2>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {savedPlaces.length ? (
+              savedPlaces.slice(0, 4).map((place) => <PlaceCard key={place.id} place={place} />)
+            ) : (
+              <EmptyState title="No saved places yet" description="Use the heart or bookmark on search results to start building lists." />
             )}
           </div>
         </section>

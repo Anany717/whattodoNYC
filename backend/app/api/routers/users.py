@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.security import hash_password
-from app.models import Place, Review, User
-from app.schemas import UserOut, UserReviewOut, UserUpdate
+from app.models import Place, Review, SavedList, SavedListItem, User
+from app.schemas import SavedListOut, UserOut, UserReviewOut, UserUpdate
 
 router = APIRouter()
 
@@ -62,3 +62,19 @@ def get_my_reviews(
             )
         )
     return response
+
+
+@router.get("/users/me/saved-lists", response_model=list[SavedListOut])
+def get_my_saved_lists(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[SavedListOut]:
+    lists = list(
+        db.scalars(
+            select(SavedList)
+            .where(SavedList.user_id == current_user.id)
+            .options(selectinload(SavedList.items).selectinload(SavedListItem.place))
+            .order_by(SavedList.created_at.desc())
+        ).all()
+    )
+    return [SavedListOut.model_validate(item) for item in lists]

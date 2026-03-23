@@ -7,7 +7,7 @@ import PlaceCard from "@/components/PlaceCard";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SaveActions from "@/components/SaveActions";
 import SavedListCard from "@/components/SavedListCard";
-import { createSavedList, getSavedLists, removeSavedListItem, searchPlaces } from "@/lib/api";
+import { createSavedList, getMySavedLists, removeSavedListItem, searchPlaces } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import type { Place, SavedList } from "@/lib/types";
 
@@ -31,7 +31,7 @@ export default function SavedListsPage() {
   const loadLists = useCallback(async () => {
     const token = getToken();
     if (!token) return;
-    const data = await getSavedLists(token);
+    const data = await getMySavedLists(token);
     setLists(data);
   }, []);
 

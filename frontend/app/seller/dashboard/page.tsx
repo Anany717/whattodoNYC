@@ -60,7 +60,7 @@ export default function SellerDashboardPage() {
   }, [load]);
 
   return (
-    <ProtectedRoute allowedRoles={["seller"]}>
+    <ProtectedRoute allowedRoles={["seller", "admin"]}>
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         <section className="relative overflow-hidden rounded-[32px] border border-white/70 bg-white/70 p-6 shadow-lift backdrop-blur-md">
           <div className="absolute -left-10 top-4 h-24 w-24 rounded-full bg-brand-100/80 blur-2xl" />

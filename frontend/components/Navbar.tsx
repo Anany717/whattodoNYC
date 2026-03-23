@@ -41,7 +41,7 @@ export default function Navbar() {
   const links = useMemo(() => {
     const base = [
       { href: "/", label: "Home" },
-      { href: "/results", label: "Results" },
+      { href: "/search", label: "Search" },
       { href: "/map", label: "Map" }
     ];
 
@@ -75,7 +75,18 @@ export default function Navbar() {
 
         <nav className="flex flex-wrap items-center gap-2">
           {links.map((link) => (
-            <NavLink key={link.href} href={link.href} label={link.label} active={pathname === link.href} />
+            <NavLink
+              key={link.href}
+              href={link.href}
+              label={link.label}
+              active={
+                link.href === "/"
+                  ? pathname === "/"
+                  : link.href === "/search"
+                    ? pathname === "/search" || pathname.startsWith("/search/") || pathname === "/results"
+                    : pathname === link.href || pathname.startsWith(`${link.href}/`)
+              }
+            />
           ))}
 
           {!user ? (

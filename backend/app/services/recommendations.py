@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import (
-    AuthenticityLabel,
-    Place,
-    PlaceTag,
-)
+from app.models import Place, PlaceTag
 from app.schemas import RecommendationItem, RecommendationRequest
 from app.services.google_places import fetch_and_cache_google_places
+from app.services.place_metrics import (
+    active_promotion_boost,
+    authenticity_score,
+    average_rating,
+    is_open_now,
+    tag_names,
+)
 from app.services.weather import get_weather_snapshot
 from app.utils.geo import haversine_km
 
@@ -30,20 +32,20 @@ class ScoreBreakdown:
 
 
 WEIGHTS = {
-    "keyword_relevance": 0.20,
-    "distance_score": 0.18,
-    "price_fit": 0.14,
-    "group_fit": 0.10,
-    "weather_fit": 0.10,
-    "review_strength": 0.14,
-    "authenticity_score": 0.10,
+    "keyword_relevance": 0.38,
+    "distance_score": 0.14,
+    "price_fit": 0.11,
+    "group_fit": 0.08,
+    "weather_fit": 0.07,
+    "review_strength": 0.10,
+    "authenticity_score": 0.08,
     "promotion_boost": 0.04,
 }
 
 
 def get_recommendations(db: Session, req: RecommendationRequest) -> list[RecommendationItem]:
     candidates = _load_candidates(db)
-    if len(candidates) < 10:
+    if _should_expand_candidates(candidates, req):
         fetch_and_cache_google_places(
             db,
             query=req.keywords,
@@ -63,7 +65,7 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
             continue
         if req.budget and place.price_level and place.price_level > req.budget:
             continue
-        if not _is_open(place):
+        if not is_open_now(place):
             continue
         if not _passes_preference_weather_filter(place, req.preference, weather):
             continue
@@ -84,7 +86,7 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
         )
         scored.append((item, score))
 
-    scored.sort(key=lambda entry: entry[1], reverse=True)
+    scored.sort(key=lambda entry: (entry[1], entry[0].distance_km * -1), reverse=True)
     return [item for item, _ in scored[:10]]
 
 
@@ -98,31 +100,21 @@ def _load_candidates(db: Session) -> list[Place]:
             selectinload(Place.authenticity_votes),
             selectinload(Place.promotions),
         )
-        .order_by(Place.created_at.desc())
+        .order_by(Place.updated_at.desc(), Place.created_at.desc())
     )
     return list(db.scalars(query).all())
 
 
-def _is_open(place: Place) -> bool:
-    if not place.hours:
-        return True
-
-    now = datetime.now(timezone.utc)
-    day = now.weekday() % 7
-    current_time = now.time().replace(tzinfo=None)
-
-    today = [hour for hour in place.hours if hour.day_of_week == day]
-    if not today:
-        return True
-
-    for hour in today:
-        if hour.is_closed:
+def _should_expand_candidates(candidates: list[Place], req: RecommendationRequest) -> bool:
+    relevant_matches = 0
+    for place in candidates:
+        if haversine_km(req.lat, req.lng, place.lat, place.lng) > req.radius_km:
+            continue
+        if _keyword_relevance(place, req.keywords) >= 0.35:
+            relevant_matches += 1
+        if relevant_matches >= 10:
             return False
-        if hour.open_time is None or hour.close_time is None:
-            return True
-        if hour.open_time <= current_time <= hour.close_time:
-            return True
-    return False
+    return True
 
 
 def _score_place(
@@ -138,8 +130,8 @@ def _score_place(
     group_fit = _group_fit(req.group_size, place)
     weather_fit = _weather_fit(req.preference, place, weather)
     review_strength = _review_strength(place)
-    auth_score = _authenticity_score(place)
-    promo_boost = _promotion_boost(place)
+    auth_score = authenticity_score(place)
+    promo_boost = active_promotion_boost(place)
 
     return ScoreBreakdown(
         keyword_relevance=keyword,
@@ -154,22 +146,55 @@ def _score_place(
 
 
 def _keyword_relevance(place: Place, keywords: str) -> float:
-    tokens = [token.strip().lower() for token in keywords.split() if token.strip()]
+    normalized_query = " ".join(keywords.lower().split())
+    tokens = [token for token in normalized_query.replace(",", " ").split() if token]
     if not tokens:
         return 0.0
 
-    searchable = [place.name.lower(), place.place_type.value.lower()]
-    if place.neighborhood:
-        searchable.append(place.neighborhood.lower())
-    if place.formatted_address:
-        searchable.append(place.formatted_address.lower())
-    for place_tag in place.tags:
-        if place_tag.tag:
-            searchable.append(place_tag.tag.name.lower())
-    combined = " ".join(searchable)
+    name = place.name.lower()
+    place_type = place.place_type.value.lower()
+    neighborhood = (place.neighborhood or "").lower()
+    address = (place.formatted_address or "").lower()
+    tags = tag_names(place)
 
-    hits = sum(1 for token in tokens if token in combined)
-    return hits / len(tokens)
+    score = 0.0
+    max_score = 10.0 + (len(tokens) * 4.5)
+
+    if normalized_query in name:
+        score += 8.0
+    elif any(token in name for token in tokens):
+        score += 2.0
+
+    if normalized_query in " ".join(tags):
+        score += 4.0
+    if normalized_query == place_type:
+        score += 4.0
+    elif normalized_query in place_type:
+        score += 2.5
+    if normalized_query in neighborhood:
+        score += 2.5
+    if normalized_query in address:
+        score += 2.0
+
+    token_hits = 0
+    for token in tokens:
+        token_score = 0.0
+        if token in name:
+            token_score += 3.0
+        if any(token in tag for tag in tags):
+            token_score += 2.8
+        if token == place_type or token in place_type:
+            token_score += 2.3
+        if token in neighborhood:
+            token_score += 1.6
+        if token in address:
+            token_score += 1.1
+        if token_score > 0:
+            token_hits += 1
+        score += token_score
+
+    score += (token_hits / len(tokens)) * 3.0
+    return min(1.0, score / max_score)
 
 
 def _price_fit(budget: int, price_level: int | None) -> float:
@@ -183,7 +208,9 @@ def _group_fit(group_size: int, place: Place) -> float:
     if not place.reviews:
         return 0.5
 
-    group_ratings = [review.rating_groupfit for review in place.reviews if review.rating_groupfit is not None]
+    group_ratings = [
+        review.rating_groupfit for review in place.reviews if review.rating_groupfit is not None
+    ]
     if not group_ratings:
         return 0.5
 
@@ -197,7 +224,7 @@ def _group_fit(group_size: int, place: Place) -> float:
 
 
 def _weather_fit(preference: str, place: Place, weather: dict) -> float:
-    tags = {place_tag.tag.name.lower() for place_tag in place.tags if place_tag.tag}
+    tags = set(tag_names(place))
     has_outdoor = "outdoor" in tags
     has_indoor = "indoor" in tags
 
@@ -226,7 +253,7 @@ def _weather_fit(preference: str, place: Place, weather: dict) -> float:
 
 
 def _passes_preference_weather_filter(place: Place, preference: str, weather: dict) -> bool:
-    tags = {place_tag.tag.name.lower() for place_tag in place.tags if place_tag.tag}
+    tags = set(tag_names(place))
     has_outdoor = "outdoor" in tags
     has_indoor = "indoor" in tags
     precipitation = bool(weather.get("precipitation"))
@@ -243,32 +270,11 @@ def _passes_preference_weather_filter(place: Place, preference: str, weather: di
 
 
 def _review_strength(place: Place) -> float:
-    if not place.reviews:
+    place_average_rating = average_rating(place)
+    if place_average_rating is None:
         return 0.4
-    avg = sum(review.rating_overall for review in place.reviews) / len(place.reviews)
     volume_boost = min(0.2, len(place.reviews) * 0.02)
-    return min(1.0, (avg / 5) + volume_boost)
-
-
-def _authenticity_score(place: Place) -> float:
-    if not place.authenticity_votes:
-        return 0.5
-
-    authentic = sum(1 for vote in place.authenticity_votes if vote.label == AuthenticityLabel.authentic)
-    touristy = sum(1 for vote in place.authenticity_votes if vote.label == AuthenticityLabel.touristy)
-    total = authentic + touristy
-    if total == 0:
-        return 0.5
-    return authentic / total
-
-
-def _promotion_boost(place: Place) -> float:
-    now = datetime.now(timezone.utc)
-    active = [promo for promo in place.promotions if promo.start_at <= now <= promo.end_at]
-    if not active:
-        return 0.0
-    boost = max(float(promo.boost_factor) for promo in active)
-    return min(1.0, (boost - 1.0) / 2.0)
+    return min(1.0, (place_average_rating / 5) + volume_boost)
 
 
 def _build_why(breakdown: ScoreBreakdown) -> str:

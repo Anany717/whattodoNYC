@@ -5,17 +5,34 @@ import { useEffect, useState } from "react";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SellerStatsCard from "@/components/SellerStatsCard";
-import { getAdminPlaces, getAdminUsers, getSellerPlaces, getSellerPromotions } from "@/lib/api";
+import {
+  getAdminPlaces,
+  getAdminReviews,
+  getAdminUsers,
+  getMyReviews,
+  getMySavedLists,
+  getSellerPlaces,
+  getSellerPromotions
+} from "@/lib/api";
 import { getToken, loadCurrentUser } from "@/lib/auth";
 import type { User } from "@/lib/types";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState<{ managedPlaces: number; promotions: number; users: number; places: number }>({
+  const [stats, setStats] = useState<{
+    managedPlaces: number;
+    promotions: number;
+    users: number;
+    places: number;
+    reviews: number;
+    savedLists: number;
+  }>({
     managedPlaces: 0,
     promotions: 0,
     users: 0,
-    places: 0
+    places: 0,
+    reviews: 0,
+    savedLists: 0
   });
 
   useEffect(() => {
@@ -32,8 +49,17 @@ export default function DashboardPage() {
       }
 
       if (me.role === "admin") {
-        const [users, places] = await Promise.all([getAdminUsers(token), getAdminPlaces(token)]);
-        setStats((prev) => ({ ...prev, users: users.length, places: places.length }));
+        const [users, places, reviews] = await Promise.all([
+          getAdminUsers(token),
+          getAdminPlaces(token),
+          getAdminReviews(token)
+        ]);
+        setStats((prev) => ({ ...prev, users: users.length, places: places.length, reviews: reviews.length }));
+      }
+
+      if (me.role === "customer" || me.role === "reviewer") {
+        const [savedLists, reviews] = await Promise.all([getMySavedLists(token), getMyReviews(token)]);
+        setStats((prev) => ({ ...prev, savedLists: savedLists.length, reviews: reviews.length }));
       }
     };
 
@@ -57,12 +83,13 @@ export default function DashboardPage() {
             <>
               <SellerStatsCard label="Total Users" value={stats.users} />
               <SellerStatsCard label="Total Places" value={stats.places} />
+              <SellerStatsCard label="Total Reviews" value={stats.reviews} />
             </>
           ) : null}
           {(user?.role === "customer" || user?.role === "reviewer") && (
             <>
-              <SellerStatsCard label="Saved Lists" value={1} />
-              <SellerStatsCard label="Review Goals" value={3} />
+              <SellerStatsCard label="Saved Lists" value={stats.savedLists} />
+              <SellerStatsCard label="Reviews Posted" value={stats.reviews} />
             </>
           )}
         </section>

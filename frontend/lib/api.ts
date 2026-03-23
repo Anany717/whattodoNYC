@@ -13,6 +13,7 @@ import type {
   ReviewPayload,
   ReviewUpdatePayload,
   SavedList,
+  SearchSortBy,
   User,
   UserReview
 } from "@/lib/types";
@@ -96,6 +97,12 @@ export function getMyReviews(token: string) {
   });
 }
 
+export function getMySavedLists(token: string) {
+  return request<SavedList[]>("/users/me/saved-lists", {
+    headers: authHeaders(token)
+  });
+}
+
 export function fetchRecommendations(payload: RecommendationRequest) {
   return request<RecommendationResponse>("/recommendations", {
     method: "POST",
@@ -111,6 +118,7 @@ export function searchPlaces(params: {
   price_level?: number;
   tag?: string;
   open_now?: boolean;
+  sort_by?: SearchSortBy;
 }) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -152,6 +160,13 @@ export function updateReview(token: string, reviewId: string, payload: ReviewUpd
   });
 }
 
+export function deleteReview(token: string, reviewId: string) {
+  return request<void>(`/reviews/${reviewId}`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+}
+
 export function voteAuthenticity(token: string, place_id: string, label: "authentic" | "touristy") {
   return request<AuthenticitySummary>("/authenticity/vote", {
     method: "POST",
@@ -178,6 +193,12 @@ export function createSavedList(token: string, name: string) {
 
 export function getSavedLists(token: string) {
   return request<SavedList[]>("/saved-lists", {
+    headers: authHeaders(token)
+  });
+}
+
+export function getSavedList(token: string, listId: string) {
+  return request<SavedList>(`/saved-lists/${listId}`, {
     headers: authHeaders(token)
   });
 }
@@ -225,6 +246,12 @@ export function getAdminUsers(token: string) {
 
 export function getAdminPlaces(token: string) {
   return request<Place[]>("/admin/places", {
+    headers: authHeaders(token)
+  });
+}
+
+export function getAdminReviews(token: string) {
+  return request<Review[]>("/admin/reviews", {
     headers: authHeaders(token)
   });
 }

@@ -1,5 +1,5 @@
 from app.core.database import SessionLocal
-from app.models import Place, PlaceSource, PlaceTag, PlaceType, Tag
+from app.models import Place, PlaceSource, PlaceTag, PlaceType, Review, Tag, User, UserRole
 
 
 def _tag(db, name: str) -> Tag:
@@ -83,3 +83,89 @@ def test_search_matches_tags_neighborhood_and_type(client):
     assert activity_search.status_code == 200
     activity_items = activity_search.json()["items"]
     assert activity_items[0]["id"] == activity_place_id
+
+
+def test_search_sorting_supports_price_rating_and_distance(client):
+    db = SessionLocal()
+    try:
+        pizza = _tag(db, "pizza")
+        user = User(
+            full_name="Reviewer",
+            email="reviewer@example.com",
+            password_hash="hash",
+            role=UserRole.customer,
+        )
+        db.add(user)
+        db.flush()
+
+        cheap = Place(
+            source=PlaceSource.internal,
+            place_type=PlaceType.restaurant,
+            name="Cheap Pizza Corner",
+            formatted_address="1 Main St, New York, NY",
+            neighborhood="Midtown",
+            lat=40.7415,
+            lng=-73.9901,
+            price_level=1,
+        )
+        premium = Place(
+            source=PlaceSource.internal,
+            place_type=PlaceType.restaurant,
+            name="Premium Pizza Room",
+            formatted_address="15 Main St, New York, NY",
+            neighborhood="Midtown",
+            lat=40.7435,
+            lng=-73.9898,
+            price_level=4,
+        )
+        closest = Place(
+            source=PlaceSource.internal,
+            place_type=PlaceType.restaurant,
+            name="Closest Pizza Slice",
+            formatted_address="10 Main St, New York, NY",
+            neighborhood="Midtown",
+            lat=40.7412,
+            lng=-73.9898,
+            price_level=2,
+        )
+        db.add_all([cheap, premium, closest])
+        db.flush()
+
+        for place in [cheap, premium, closest]:
+            db.add(PlaceTag(place_id=place.id, tag_id=pizza.id))
+
+        db.add_all(
+            [
+                Review(user_id=user.id, place_id=cheap.id, rating_overall=3),
+                Review(user_id=user.id, place_id=premium.id, rating_overall=5),
+                Review(user_id=user.id, place_id=closest.id, rating_overall=4),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    price_search = client.get("/places/search", params={"query": "pizza", "sort_by": "price_asc"})
+    assert price_search.status_code == 200
+    assert price_search.json()["sort_by"] == "price_asc"
+    assert price_search.json()["items"][0]["name"] == "Cheap Pizza Corner"
+
+    rating_search = client.get(
+        "/places/search",
+        params={"query": "pizza", "sort_by": "rating_desc"},
+    )
+    assert rating_search.status_code == 200
+    assert rating_search.json()["items"][0]["name"] == "Premium Pizza Room"
+
+    distance_search = client.get(
+        "/places/search",
+        params={
+            "query": "pizza",
+            "sort_by": "distance_asc",
+            "lat": 40.7411,
+            "lng": -73.9897,
+            "radius_km": 5,
+        },
+    )
+    assert distance_search.status_code == 200
+    assert distance_search.json()["items"][0]["name"] == "Closest Pizza Slice"

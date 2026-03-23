@@ -13,13 +13,16 @@ router = APIRouter()
 def create_promotion(
     payload: PromotionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.seller)),
+    current_user: User = Depends(require_roles(UserRole.seller, UserRole.admin)),
 ) -> PromotionOut:
     place = db.get(Place, payload.place_id)
     if not place:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Place not found")
-    if place.managed_by_user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You must claim this place first")
+    if current_user.role == UserRole.seller and place.managed_by_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must claim this place first",
+        )
 
     promo = Promotion(
         place_id=payload.place_id,

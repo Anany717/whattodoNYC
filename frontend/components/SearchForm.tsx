@@ -1,25 +1,63 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { RecommendationRequest } from "@/lib/types";
+import SortDropdown from "@/components/SortDropdown";
+import type { RecommendationRequest, SearchSortBy } from "@/lib/types";
 
 const DEFAULT_LAT = 40.7411;
 const DEFAULT_LNG = -73.9897;
 
-export default function SearchForm() {
+type SearchFormValues = RecommendationRequest & {
+  sort_by: SearchSortBy;
+};
+
+type Props = {
+  initialValues?: Partial<SearchFormValues>;
+  actionPath?: string;
+  submitLabel?: string;
+};
+
+export default function SearchForm({
+  initialValues,
+  actionPath = "/search",
+  submitLabel = "Search NYC",
+}: Props) {
   const router = useRouter();
-  const [form, setForm] = useState<RecommendationRequest>({
-    keywords: "cheap authentic thai",
-    budget: 2,
-    group_size: 2,
-    preference: "either",
-    lat: DEFAULT_LAT,
-    lng: DEFAULT_LNG,
-    radius_km: 5
+  const [form, setForm] = useState<SearchFormValues>({
+    keywords: initialValues?.keywords || "cheap authentic thai",
+    budget: initialValues?.budget || 2,
+    group_size: initialValues?.group_size || 2,
+    preference: initialValues?.preference || "either",
+    lat: initialValues?.lat || DEFAULT_LAT,
+    lng: initialValues?.lng || DEFAULT_LNG,
+    radius_km: initialValues?.radius_km || 5,
+    sort_by: initialValues?.sort_by || "relevance",
   });
   const [loadingGeo, setLoadingGeo] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      keywords: initialValues?.keywords || "cheap authentic thai",
+      budget: initialValues?.budget || 2,
+      group_size: initialValues?.group_size || 2,
+      preference: initialValues?.preference || "either",
+      lat: initialValues?.lat || DEFAULT_LAT,
+      lng: initialValues?.lng || DEFAULT_LNG,
+      radius_km: initialValues?.radius_km || 5,
+      sort_by: initialValues?.sort_by || "relevance",
+    });
+  }, [
+    initialValues?.budget,
+    initialValues?.group_size,
+    initialValues?.keywords,
+    initialValues?.lat,
+    initialValues?.lng,
+    initialValues?.preference,
+    initialValues?.radius_km,
+    initialValues?.sort_by,
+  ]);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({
@@ -29,12 +67,13 @@ export default function SearchForm() {
       preference: form.preference,
       lat: String(form.lat),
       lng: String(form.lng),
-      radius_km: String(form.radius_km)
+      radius_km: String(form.radius_km),
+      sort_by: form.sort_by,
     });
     return params.toString();
   }, [form]);
 
-  const update = <K extends keyof RecommendationRequest>(key: K, value: RecommendationRequest[K]) => {
+  const update = <K extends keyof SearchFormValues>(key: K, value: SearchFormValues[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -56,10 +95,10 @@ export default function SearchForm() {
 
   return (
     <form
-      className="card mx-auto mt-8 w-full max-w-3xl space-y-5 p-6"
+      className="card mx-auto mt-8 w-full max-w-5xl space-y-5 p-6"
       onSubmit={(event) => {
         event.preventDefault();
-        router.push(`/results?${queryString}`);
+        router.push(`${actionPath}?${queryString}`);
       }}
     >
       <div>
@@ -76,7 +115,7 @@ export default function SearchForm() {
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div>
           <label htmlFor="budget" className="mb-1 block text-sm font-semibold text-slate-700">
             Budget
@@ -130,9 +169,7 @@ export default function SearchForm() {
           <select
             id="preference"
             value={form.preference}
-            onChange={(event) =>
-              update("preference", event.target.value as "indoor" | "outdoor" | "either")
-            }
+            onChange={(event) => update("preference", event.target.value as "indoor" | "outdoor" | "either")}
             className="field-select"
           >
             <option value="either">Either</option>
@@ -140,28 +177,29 @@ export default function SearchForm() {
             <option value="outdoor">Outdoor</option>
           </select>
         </div>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={useLocation}
-          className="btn-secondary px-4 py-2 text-sm"
-        >
-          {loadingGeo ? "Locating..." : "Use my location"}
-        </button>
-
-        <div className="text-sm text-slate-600">
-          Lat: {form.lat.toFixed(4)} | Lng: {form.lng.toFixed(4)}
+        <div>
+          <label htmlFor="sort_by" className="mb-1 block text-sm font-semibold text-slate-700">
+            Sort by
+          </label>
+          <SortDropdown value={form.sort_by} onChange={(value) => update("sort_by", value)} />
         </div>
       </div>
 
-      <button
-        type="submit"
-        className="btn-primary w-full"
-      >
-        Get Recommendations
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={useLocation} className="btn-secondary px-4 py-2 text-sm">
+            {loadingGeo ? "Locating..." : "Use my location"}
+          </button>
+          <div className="text-sm text-slate-600">
+            Lat: {form.lat.toFixed(4)} | Lng: {form.lng.toFixed(4)}
+          </div>
+        </div>
+
+        <button type="submit" className="btn-primary min-w-44">
+          {submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

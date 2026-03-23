@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
 import SellerStatsCard from "@/components/SellerStatsCard";
-import { getAdminPlaces, getAdminUsers, getPlaceReviews } from "@/lib/api";
+import { getAdminPlaces, getAdminReviews, getAdminUsers } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import type { Place, User } from "@/lib/types";
+import type { Place, Review, User } from "@/lib/types";
 
 export default function AdminDashboardPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [places, setPlaces] = useState<Place[]>([]);
-  const [totalReviews, setTotalReviews] = useState(0);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,12 +19,14 @@ export default function AdminDashboardPage() {
       const token = getToken();
       if (!token) return;
 
-      const [allUsers, allPlaces] = await Promise.all([getAdminUsers(token), getAdminPlaces(token)]);
+      const [allUsers, allPlaces, allReviews] = await Promise.all([
+        getAdminUsers(token),
+        getAdminPlaces(token),
+        getAdminReviews(token)
+      ]);
       setUsers(allUsers);
       setPlaces(allPlaces);
-
-      const reviewCounts = await Promise.all(allPlaces.slice(0, 20).map((place) => getPlaceReviews(place.id)));
-      setTotalReviews(reviewCounts.reduce((sum, reviews) => sum + reviews.length, 0));
+      setReviews(allReviews);
     };
 
     load().catch((err: Error) => setError(err.message));
@@ -40,7 +42,7 @@ export default function AdminDashboardPage() {
         <section className="grid gap-4 md:grid-cols-3">
           <SellerStatsCard label="Total Users" value={users.length} />
           <SellerStatsCard label="Total Places" value={places.length} />
-          <SellerStatsCard label="Total Reviews" value={totalReviews} />
+          <SellerStatsCard label="Total Reviews" value={reviews.length} />
         </section>
 
         <section className="grid gap-4 lg:grid-cols-2">
@@ -92,6 +94,32 @@ export default function AdminDashboardPage() {
             </div>
           </article>
         </section>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-6">
+          <h2 className="text-xl font-semibold text-slate-900">Recent Reviews</h2>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-slate-500">
+                  <th className="pb-2">Review ID</th>
+                  <th className="pb-2">Place ID</th>
+                  <th className="pb-2">Overall</th>
+                  <th className="pb-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviews.slice(0, 8).map((review) => (
+                  <tr key={review.id} className="border-b border-slate-100">
+                    <td className="py-2">{review.id.slice(0, 8)}...</td>
+                    <td className="py-2">{review.place_id.slice(0, 8)}...</td>
+                    <td className="py-2">{review.rating_overall}/5</td>
+                    <td className="py-2">{new Date(review.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
       </main>
     </ProtectedRoute>
   );

@@ -11,11 +11,22 @@ export default function HomePage() {
           <span className="text-brand-700"> with context-aware picks.</span>
         </h1>
         <p className="mt-3 max-w-2xl text-slate-700">
-          Search by vibe, budget, group size, and location. Get ranked recommendations with quick, confident reasons.
+          Search by vibe, budget, group size, location, and sort preference. Get ranked recommendations plus a wider search view so you can compare fast and commit with confidence.
         </p>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          {["Keyword-first ranking", "Saved favorites and lists", "Seller and admin dashboards"].map((pill) => (
+            <span
+              key={pill}
+              className="rounded-full border border-brand-100 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700"
+            >
+              {pill}
+            </span>
+          ))}
+        </div>
       </section>
 
-      <SearchForm />
+      <SearchForm submitLabel="Get Recommendations" />
     </main>
   );
 }
