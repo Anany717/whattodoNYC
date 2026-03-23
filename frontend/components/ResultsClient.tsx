@@ -70,51 +70,56 @@ export default function ResultsClient() {
     setRecommendationError(null);
     setSearchError(null);
 
-    Promise.allSettled([
-      fetchRecommendations(request),
-      searchPlaces({
-        query: request.keywords,
-        lat: request.lat,
-        lng: request.lng,
-        radius_km: request.radius_km,
-        price_level: request.budget,
-        sort_by: sortBy,
-      }),
-    ])
-      .then(([recommendationResult, searchResult]) => {
+    const load = async () => {
+      try {
+        const recommendationResult = await fetchRecommendations(request);
         if (!mounted) return;
 
-        if (recommendationResult.status === "fulfilled") {
-          setResults(recommendationResult.value.results);
-          localStorage.setItem(
-            "whattodo_results",
-            JSON.stringify({ generatedAt: new Date().toISOString(), request, results: recommendationResult.value.results })
-          );
-        } else {
-          setRecommendationError(
-            recommendationResult.reason instanceof Error
-              ? recommendationResult.reason.message
-              : "Could not load recommendations."
-          );
-        }
+        setResults(recommendationResult.results);
+        localStorage.setItem(
+          "whattodo_results",
+          JSON.stringify({
+            generatedAt: new Date().toISOString(),
+            request,
+            results: recommendationResult.results
+          })
+        );
+      } catch (error) {
+        if (!mounted) return;
+        setRecommendationError(
+          error instanceof Error ? error.message : "Could not load recommendations."
+        );
+      }
 
-        if (searchResult.status === "fulfilled") {
-          setSearchResults(searchResult.value.items);
-          setGoogleUsed(searchResult.value.google_results_used);
-          setLiveSearchAttempted(searchResult.value.live_search_attempted);
-          setLiveSearchSucceeded(searchResult.value.live_search_succeeded);
-          setLiveResultCount(searchResult.value.live_result_count);
-          setSearchStatusMessage(searchResult.value.status_message);
-        } else {
-          setSearchError(
-            searchResult.reason instanceof Error ? searchResult.reason.message : "Could not load search results."
-          );
-        }
-      })
-      .finally(() => {
+      try {
+        const searchResult = await searchPlaces({
+          query: request.keywords,
+          lat: request.lat,
+          lng: request.lng,
+          radius_km: request.radius_km,
+          price_level: request.budget,
+          sort_by: sortBy,
+        });
+        if (!mounted) return;
+
+        setSearchResults(searchResult.items);
+        setGoogleUsed(searchResult.google_results_used);
+        setLiveSearchAttempted(searchResult.live_search_attempted);
+        setLiveSearchSucceeded(searchResult.live_search_succeeded);
+        setLiveResultCount(searchResult.live_result_count);
+        setSearchStatusMessage(searchResult.status_message);
+      } catch (error) {
+        if (!mounted) return;
+        setSearchError(
+          error instanceof Error ? error.message : "Could not load search results."
+        );
+      } finally {
         if (!mounted) return;
         setLoading(false);
-      });
+      }
+    };
+
+    load();
 
     return () => {
       mounted = false;
