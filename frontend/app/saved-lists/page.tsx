@@ -110,8 +110,8 @@ export default function SavedListsPage() {
   return (
     <ProtectedRoute>
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-        <h1 className="font-display text-3xl font-bold text-slate-900">Saved Lists</h1>
-        <p className="text-sm text-slate-600">Organize places by trips, neighborhoods, or moods.</p>
+        <h1 className="font-display text-3xl font-bold text-slate-900">Private Saved Lists</h1>
+        <p className="text-sm text-slate-600">Keep personal bookmarks here, or use Plans when you want to coordinate with friends.</p>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

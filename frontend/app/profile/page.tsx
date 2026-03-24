@@ -166,6 +166,19 @@ export default function ProfilePage() {
             )}
           </div>
         </section>
+
+        <section className="card p-6">
+          <h2 className="font-display text-xl font-semibold text-slate-900">Social planning</h2>
+          <p className="mt-2 text-sm text-slate-600">Create shared plans with friends, vote on options, and finalize where the group is going.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/plans" className="btn-primary px-4 py-2 text-sm">
+              Open plans
+            </Link>
+            <Link href="/friends" className="btn-secondary px-4 py-2 text-sm">
+              Manage friends
+            </Link>
+          </div>
+        </section>
       </main>
     </ProtectedRoute>
   );

@@ -7,12 +7,20 @@ export type SearchSortBy =
   | "rating_desc"
   | "distance_asc"
   | "authenticity_desc";
+export type FriendshipStatus = "pending" | "accepted" | "declined" | "blocked";
+export type PlanStatus = "draft" | "active" | "finalized" | "archived";
+export type PlanVisibility = "private" | "shared";
+export type PlanMemberRole = "host" | "collaborator";
+export type PlanVoteValue = "yes" | "no" | "maybe";
 
-export type User = {
+export type UserSummary = {
   id: string;
   full_name: string;
   email: string;
   role: UserRole;
+};
+
+export type User = UserSummary & {
   created_at: string;
 };
 
@@ -164,6 +172,128 @@ export type SavedList = {
   name: string;
   created_at: string;
   items: SavedListItem[];
+};
+
+export type Friendship = {
+  id: string;
+  requester_user_id: string;
+  addressee_user_id: string;
+  status: FriendshipStatus;
+  created_at: string;
+  updated_at: string;
+  requester: UserSummary;
+  addressee: UserSummary;
+};
+
+export type FriendsListEntry = {
+  friendship_id: string;
+  friend: UserSummary;
+  created_at: string;
+};
+
+export type FriendRequestsResponse = {
+  incoming: Friendship[];
+  outgoing: Friendship[];
+};
+
+export type VoteSummary = {
+  yes_count: number;
+  no_count: number;
+  maybe_count: number;
+  total_votes: number;
+  current_user_vote: PlanVoteValue | null;
+};
+
+export type PlanItemVote = {
+  id: string;
+  plan_item_id: string;
+  user_id: string;
+  vote: PlanVoteValue;
+  created_at: string;
+  updated_at: string;
+  user: UserSummary;
+};
+
+export type PlanMember = {
+  plan_id: string;
+  user_id: string;
+  role: PlanMemberRole;
+  joined_at: string;
+  user: UserSummary;
+};
+
+export type PlanItem = {
+  id: string;
+  plan_id: string;
+  place_id: string;
+  added_by_user_id: string;
+  notes: string | null;
+  created_at: string;
+  place: Place;
+  added_by_user: UserSummary;
+  votes: PlanItemVote[];
+  vote_summary: VoteSummary;
+};
+
+export type Plan = {
+  id: string;
+  host_user_id: string;
+  title: string;
+  description: string | null;
+  status: PlanStatus;
+  visibility: PlanVisibility;
+  final_place_id: string | null;
+  created_at: string;
+  updated_at: string;
+  host: UserSummary;
+  members: PlanMember[];
+  items: PlanItem[];
+  final_choice: PlanItem | null;
+  leading_choice: PlanItem | null;
+};
+
+export type PlanSummary = {
+  id: string;
+  host_user_id: string;
+  title: string;
+  description: string | null;
+  status: PlanStatus;
+  visibility: PlanVisibility;
+  final_place_id: string | null;
+  created_at: string;
+  updated_at: string;
+  host: UserSummary;
+  member_count: number;
+  item_count: number;
+  final_choice: PlanItem | null;
+  leading_choice: PlanItem | null;
+};
+
+export type PlanVotesSummaryResponse = {
+  plan_id: string;
+  items: PlanItem[];
+  leading_choice: PlanItem | null;
+};
+
+export type FinalChoiceResponse = {
+  plan_id: string;
+  status: PlanStatus;
+  final_choice: PlanItem | null;
+  leading_choice: PlanItem | null;
+};
+
+export type PlanCreatePayload = {
+  title: string;
+  description?: string;
+  visibility?: PlanVisibility;
+  invited_user_ids?: string[];
+};
+
+export type PlanUpdatePayload = {
+  title?: string;
+  description?: string;
+  status?: PlanStatus;
+  visibility?: PlanVisibility;
 };
 
 export type RecommendationRequest = {

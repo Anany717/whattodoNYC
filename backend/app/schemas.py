@@ -5,12 +5,31 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.models import AuthenticityLabel, PlaceSource, PlaceType, UserRole
+from app.models import (
+    AuthenticityLabel,
+    FriendshipStatus,
+    PlanMemberRole,
+    PlanStatus,
+    PlanVisibility,
+    PlanVoteValue,
+    PlaceSource,
+    PlaceType,
+    UserRole,
+)
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class UserSummary(BaseModel):
+    id: str
+    full_name: str
+    email: EmailStr
+    role: UserRole
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserBase(BaseModel):
@@ -28,11 +47,8 @@ class UserLogin(BaseModel):
     password: str
 
 
-class UserOut(UserBase):
-    id: str
+class UserOut(UserSummary):
     created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdate(BaseModel):
@@ -236,6 +252,63 @@ class SavedListOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FriendshipCreate(BaseModel):
+    addressee_user_id: str
+
+
+class FriendshipOut(BaseModel):
+    id: str
+    requester_user_id: str
+    addressee_user_id: str
+    status: FriendshipStatus
+    created_at: datetime
+    updated_at: datetime
+    requester: UserSummary
+    addressee: UserSummary
+
+
+class FriendsListEntry(BaseModel):
+    friendship_id: str
+    friend: UserSummary
+    created_at: datetime
+
+
+class FriendRequestsOut(BaseModel):
+    incoming: list[FriendshipOut] = Field(default_factory=list)
+    outgoing: list[FriendshipOut] = Field(default_factory=list)
+
+
+class PlanCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    visibility: PlanVisibility = PlanVisibility.shared
+    invited_user_ids: list[str] = Field(default_factory=list)
+
+
+class PlanUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    status: PlanStatus | None = None
+    visibility: PlanVisibility | None = None
+
+
+class PlanInviteCreate(BaseModel):
+    user_id: str
+
+
+class PlanItemCreate(BaseModel):
+    place_id: str
+    notes: str | None = Field(default=None, max_length=280)
+
+
+class PlanVoteCreate(BaseModel):
+    vote: PlanVoteValue
+
+
+class PlanFinalizeCreate(BaseModel):
+    plan_item_id: str | None = None
+
+
 class RecommendationRequest(BaseModel):
     keywords: str
     budget: int = Field(ge=1, le=4)
@@ -264,3 +337,93 @@ class RecommendationItem(BaseModel):
 
 class RecommendationResponse(BaseModel):
     results: list[RecommendationItem]
+
+
+class VoteSummaryOut(BaseModel):
+    yes_count: int = 0
+    no_count: int = 0
+    maybe_count: int = 0
+    total_votes: int = 0
+    current_user_vote: PlanVoteValue | None = None
+
+
+class PlanItemVoteOut(BaseModel):
+    id: str
+    plan_item_id: str
+    user_id: str
+    vote: PlanVoteValue
+    created_at: datetime
+    updated_at: datetime
+    user: UserSummary
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlanMemberOut(BaseModel):
+    plan_id: str
+    user_id: str
+    role: PlanMemberRole
+    joined_at: datetime
+    user: UserSummary
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PlanItemOut(BaseModel):
+    id: str
+    plan_id: str
+    place_id: str
+    added_by_user_id: str
+    notes: str | None = None
+    created_at: datetime
+    place: PlaceOut
+    added_by_user: UserSummary
+    votes: list[PlanItemVoteOut] = Field(default_factory=list)
+    vote_summary: VoteSummaryOut = Field(default_factory=VoteSummaryOut)
+
+
+class PlanOut(BaseModel):
+    id: str
+    host_user_id: str
+    title: str
+    description: str | None = None
+    status: PlanStatus
+    visibility: PlanVisibility
+    final_place_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    host: UserSummary
+    members: list[PlanMemberOut] = Field(default_factory=list)
+    items: list[PlanItemOut] = Field(default_factory=list)
+    final_choice: PlanItemOut | None = None
+    leading_choice: PlanItemOut | None = None
+
+
+class PlanSummaryOut(BaseModel):
+    id: str
+    host_user_id: str
+    title: str
+    description: str | None = None
+    status: PlanStatus
+    visibility: PlanVisibility
+    final_place_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    host: UserSummary
+    member_count: int = 0
+    item_count: int = 0
+    final_choice: PlanItemOut | None = None
+    leading_choice: PlanItemOut | None = None
+
+
+class PlanVotesSummaryOut(BaseModel):
+    plan_id: str
+    items: list[PlanItemOut] = Field(default_factory=list)
+    leading_choice: PlanItemOut | None = None
+
+
+class FinalChoiceOut(BaseModel):
+    plan_id: str
+    status: PlanStatus
+    final_choice: PlanItemOut | None = None
+    leading_choice: PlanItemOut | None = None

@@ -55,6 +55,36 @@ class AuthenticityLabel(str, enum.Enum):
     touristy = "touristy"
 
 
+class FriendshipStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    declined = "declined"
+    blocked = "blocked"
+
+
+class PlanStatus(str, enum.Enum):
+    draft = "draft"
+    active = "active"
+    finalized = "finalized"
+    archived = "archived"
+
+
+class PlanVisibility(str, enum.Enum):
+    private = "private"
+    shared = "shared"
+
+
+class PlanMemberRole(str, enum.Enum):
+    host = "host"
+    collaborator = "collaborator"
+
+
+class PlanVoteValue(str, enum.Enum):
+    yes = "yes"
+    no = "no"
+    maybe = "maybe"
+
+
 enum_values = lambda enum_cls: [item.value for item in enum_cls]  # noqa: E731
 
 
@@ -83,6 +113,39 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     saved_lists = relationship("SavedList", back_populates="user", cascade="all, delete-orphan")
+    sent_friend_requests = relationship(
+        "Friendship",
+        foreign_keys="Friendship.requester_user_id",
+        back_populates="requester",
+        cascade="all, delete-orphan",
+    )
+    received_friend_requests = relationship(
+        "Friendship",
+        foreign_keys="Friendship.addressee_user_id",
+        back_populates="addressee",
+        cascade="all, delete-orphan",
+    )
+    hosted_plans = relationship(
+        "Plan",
+        foreign_keys="Plan.host_user_id",
+        back_populates="host",
+        cascade="all, delete-orphan",
+    )
+    plan_memberships = relationship(
+        "PlanMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    added_plan_items = relationship(
+        "PlanItem",
+        foreign_keys="PlanItem.added_by_user_id",
+        back_populates="added_by_user",
+    )
+    plan_item_votes = relationship(
+        "PlanItemVote",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class Place(Base):
@@ -152,6 +215,12 @@ class Place(Base):
         "SavedListItem",
         back_populates="place",
         cascade="all, delete-orphan",
+    )
+    plan_items = relationship("PlanItem", back_populates="place", cascade="all, delete-orphan")
+    finalized_in_plans = relationship(
+        "Plan",
+        foreign_keys="Plan.final_place_id",
+        back_populates="final_place",
     )
 
 
@@ -228,6 +297,42 @@ class AuthenticityVote(Base):
 
     user = relationship("User", back_populates="authenticity_votes")
     place = relationship("Place", back_populates="authenticity_votes")
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    requester_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    addressee_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    status: Mapped[FriendshipStatus] = mapped_column(
+        Enum(FriendshipStatus, native_enum=False, values_callable=enum_values),
+        nullable=False,
+        default=FriendshipStatus.pending,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("requester_user_id", "addressee_user_id", name="uq_friendship_direction"),
+        CheckConstraint("requester_user_id <> addressee_user_id", name="friendship_not_self"),
+    )
+
+    requester = relationship(
+        "User",
+        foreign_keys=[requester_user_id],
+        back_populates="sent_friend_requests",
+    )
+    addressee = relationship(
+        "User",
+        foreign_keys=[addressee_user_id],
+        back_populates="received_friend_requests",
+    )
 
 
 class Tag(Base):
@@ -318,3 +423,93 @@ class SavedListItem(Base):
 
     saved_list = relationship("SavedList", back_populates="items")
     place = relationship("Place", back_populates="saved_list_items")
+
+
+class Plan(Base):
+    __tablename__ = "plans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    host_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[PlanStatus] = mapped_column(
+        Enum(PlanStatus, native_enum=False, values_callable=enum_values),
+        nullable=False,
+        default=PlanStatus.draft,
+    )
+    visibility: Mapped[PlanVisibility] = mapped_column(
+        Enum(PlanVisibility, native_enum=False, values_callable=enum_values),
+        nullable=False,
+        default=PlanVisibility.shared,
+    )
+    final_place_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("places.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    host = relationship("User", foreign_keys=[host_user_id], back_populates="hosted_plans")
+    final_place = relationship("Place", foreign_keys=[final_place_id], back_populates="finalized_in_plans")
+    members = relationship("PlanMember", back_populates="plan", cascade="all, delete-orphan")
+    items = relationship("PlanItem", back_populates="plan", cascade="all, delete-orphan")
+
+
+class PlanMember(Base):
+    __tablename__ = "plan_members"
+
+    plan_id: Mapped[str] = mapped_column(String(36), ForeignKey("plans.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), primary_key=True)
+    role: Mapped[PlanMemberRole] = mapped_column(
+        Enum(PlanMemberRole, native_enum=False, values_callable=enum_values),
+        nullable=False,
+        default=PlanMemberRole.collaborator,
+    )
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    plan = relationship("Plan", back_populates="members")
+    user = relationship("User", back_populates="plan_memberships")
+
+
+class PlanItem(Base):
+    __tablename__ = "plan_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id: Mapped[str] = mapped_column(String(36), ForeignKey("plans.id"), nullable=False)
+    place_id: Mapped[str] = mapped_column(String(36), ForeignKey("places.id"), nullable=False)
+    added_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("plan_id", "place_id", name="uq_plan_item_plan_place"),)
+
+    plan = relationship("Plan", back_populates="items")
+    place = relationship("Place", back_populates="plan_items")
+    added_by_user = relationship("User", foreign_keys=[added_by_user_id], back_populates="added_plan_items")
+    votes = relationship("PlanItemVote", back_populates="plan_item", cascade="all, delete-orphan")
+
+
+class PlanItemVote(Base):
+    __tablename__ = "plan_item_votes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_item_id: Mapped[str] = mapped_column(String(36), ForeignKey("plan_items.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    vote: Mapped[PlanVoteValue] = mapped_column(
+        Enum(PlanVoteValue, native_enum=False, values_callable=enum_values),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    __table_args__ = (UniqueConstraint("plan_item_id", "user_id", name="uq_plan_item_vote_user"),)
+
+    plan_item = relationship("PlanItem", back_populates="votes")
+    user = relationship("User", back_populates="plan_item_votes")

@@ -52,6 +52,8 @@ export default function Navbar() {
     const authed = [
       ...base,
       { href: "/dashboard", label: "Dashboard" },
+      { href: "/plans", label: "Plans" },
+      { href: "/friends", label: "Friends" },
       { href: "/saved-lists", label: "Saved Lists" },
       { href: "/profile", label: "Profile" }
     ];

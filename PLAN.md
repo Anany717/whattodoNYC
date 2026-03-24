@@ -1,121 +1,100 @@
-# WhatToDo NYC Search Upgrade Plan
+# WhatToDo NYC Collaborative Plans Plan
 
-Status: completed for this update.
+Status: implemented for this update.
 
-## What Was Investigated
-- Frontend search form submission flow from `/` and `/search`
-- `GET /places/search` backend route and search service
-- Google Places integration and cache/upsert behavior
-- Recommendation ranking path
-- Search result display in the frontend
+## Audit Findings
+- `saved_lists` currently support only private bookmarking and do not model collaboration, membership, or voting.
+- Auth, users, and place search flows already exist and are stable enough to reuse.
+- Place search already normalizes Google-backed results into `places`, which means plan items can reuse `place_id` without adding a second external-candidate model.
+- The cleanest path is to keep private saved lists intact and add first-class collaborative planning tables and routes beside them.
 
-## What Was Broken
-- The frontend was correctly sending search requests, but the backend was not treating Google Places as the primary search source.
-- Live Google search only ran when local matches were below a threshold, so the large seeded catalog prevented external search from running for many realistic queries.
-- When Google results were fetched, they were blended back into the same `places` table without enough metadata to make them visible as fresh external results.
-- Search results could feel stale because seeded/internal rows and cached rows were hard to distinguish in ranking and UI.
-- The schema did not store enough Google metadata to support richer result cards or trustworthy cached external place data.
+## Product Direction
+- Keep `saved_lists` as lightweight private organization.
+- Add social planning as a separate feature built around `plans`.
+- Support an in-app friends graph so plans feel native and collaborative rather than link-only sharing.
+- Reuse existing place search and place detail infrastructure for adding restaurant/activity candidates into a plan.
 
-## Root Cause Analysis
-1. Search was effectively local-first because Google fetch was gated behind an “insufficient internal matches” check.
-2. Seed data was extensive enough that the fallback threshold often never triggered.
-3. Cached Google rows did not carry enough external metadata to feel different from local seed rows.
-4. The frontend only showed a generic `google_results_used` message, which hid whether results were actually fresh/live.
+## Data Model Changes
+- Add `friendships` for requests and accepted friend relationships.
+- Add `plans` for host-owned collaborative plans.
+- Add `plan_members` for membership and roles.
+- Add `plan_items` for candidate places/events attached to a plan.
+- Add `plan_item_votes` for yes/no/maybe voting with one vote per member per item.
+- Keep `saved_lists` and `saved_list_items` unchanged for private lists.
+- Add new SQL enum types:
+  - `friendship_status`
+  - `plan_status`
+  - `plan_visibility`
+  - `plan_member_role`
+  - `plan_vote_value`
+- Update fresh schema in `backend/sql/supabase_schema.sql`.
+- Add additive upgrade script in `backend/sql/upgrades/2026_03_24_01_collaborative_plans.sql`.
 
-## What Changed
+## Backend Changes
+- Add friends routes for search, request, accept, decline, list, and remove.
+- Add plans routes for create, read, update, invite, membership, item management, voting, summary, and finalization.
+- Add helper service logic to compute vote totals, leading option, and final choice.
+- Enforce permissions:
+  - auth required for all social features
+  - only plan members can view a plan
+  - only host can invite/remove/finalize
+  - any member can vote
+- New backend files:
+  - `backend/app/api/routers/friends.py`
+  - `backend/app/api/routers/plans.py`
+  - `backend/app/services/plans.py`
+- Existing backend files updated:
+  - `backend/app/models.py`
+  - `backend/app/schemas.py`
+  - `backend/app/api/router.py`
 
-### Backend Search Flow
-- Reworked `backend/app/services/search_service.py` so keyword searches now attempt live Google Places first.
-- Local data is still used for cache, enrichment, fallback, authenticity, promotions, and saved-place continuity.
-- Added response metadata for:
-  - whether live search was attempted
-  - whether it succeeded
-  - how many live Google matches were used
-  - a product-friendly status message for the UI
-- Added per-result source labeling:
-  - `live_google`
-  - `cached_google`
-  - `internal`
+## Frontend Changes
+- Add `/friends`, `/plans`, `/plans/new`, and `/plans/[id]`.
+- Add plan index, plan detail, and create-plan flows.
+- Add friends management UI with search, requests, and accepted friends.
+- Add voting controls, member list, final-choice banner, and add-to-plan search flow.
+- Update navbar/navigation to surface plans and friends.
+- New reusable UI components:
+  - `PlanCard`
+  - `PlanMemberList`
+  - `PlanItemCard`
+  - `VoteButtons`
+  - `FriendRequestCard`
+- Existing navigation/profile/dashboard pages now link into the collaborative planning flow.
 
-### Google Places Integration
-- Reworked `backend/app/services/google_places.py` to:
-  - support text search with optional location bias
-  - fetch Place Details for top results
-  - normalize richer fields
-  - cache/update results cleanly
-  - fail gracefully without crashing the app
-- Added better handling for:
-  - missing API key
-  - request failure
-  - zero-result searches
-  - dedupe against existing places
-
-### Schema / Data Model Changes
-- Extended `places` with external metadata fields:
-  - `google_primary_type`
-  - `google_rating`
-  - `google_user_ratings_total`
-  - `external_last_synced_at`
-  - `external_raw_json`
-  - `is_seed_data`
-  - `is_cached_from_external`
-- Updated:
-  - SQLAlchemy model
-  - Pydantic schemas
-  - Supabase schema SQL
-  - dedicated Postgres upgrade SQL for existing databases
-  - seed logic
-  - frontend types
-
-### Ranking Improvements
-- Search ranking still prioritizes keyword relevance first.
-- Live Google results now get a small tie-break priority so fresh external matches are not buried behind stale local rows.
-- Recommendation scoring was updated so keyword relevance is even more dominant.
-- Recommendations now also refresh candidates through Google search for keyword-driven requests.
-
-### Frontend Improvements
-- Search results now visibly communicate whether live Google search ran and whether fallback was used.
-- Result cards and recommendation cards now surface richer external metadata such as:
-  - Google-backed badges
-  - address
-  - Google rating/count where available
-- Place detail pages now show:
-  - Google-backed data badge
-  - Google rating
-  - last sync time
-  - seed/local catalog badge when relevant
-
-## Files Updated
-- `backend/app/models.py`
-- `backend/app/schemas.py`
-- `backend/app/api/routers/places.py`
-- `backend/app/services/google_places.py`
-- `backend/app/services/search_service.py`
-- `backend/app/services/recommendations.py`
-- `backend/app/services/place_metrics.py`
-- `backend/sql/supabase_schema.sql`
-- `backend/scripts/seed.py`
-- `backend/tests/test_places_search.py`
-- `frontend/lib/types.ts`
-- `frontend/components/PlaceCard.tsx`
-- `frontend/components/ResultCard.tsx`
-- `frontend/components/ResultsClient.tsx`
-- `frontend/app/places/[id]/page.tsx`
+## What Was Built
+- Friends graph with search, request, accept/decline, list, and remove flow.
+- Collaborative plans with host/member roles.
+- Candidate plan items backed by the existing `places` table, so search and Google-backed place caching continue to work.
+- Yes/no/maybe voting with one vote per user per candidate item.
+- Automatic leading option calculation:
+  1. more yes votes
+  2. fewer no votes
+  3. more maybe votes
+- Host-controlled finalization with a final choice banner in the UI.
+- Private saved lists preserved as lightweight personal organization.
 
 ## Validation
-- Backend tests: `pytest tests -q` -> `8 passed`
-- Backend Ruff on changed files -> passed
-- Frontend lint: `npm run lint` -> passed
-- Frontend production build: `npm run build` -> passed
-
-## New Demo Behavior
-- Search now feels internet-backed because keyword searches attempt live Google Places first.
-- If Google returns fresh results, the UI shows that clearly.
-- If Google is unavailable, the app falls back to cached/local results with a user-friendly message.
-- External results are stored with richer metadata for reuse in later searches and place detail views.
+- Backend tests added for:
+  - friend request + accept flow
+  - collaborative plan voting + finalization
+- Frontend validation run:
+  - `npm run lint`
+  - `npm run build`
+- Backend validation run:
+  - `pytest tests`
+- Manual demo flow covered:
+  - create two users
+  - become friends
+  - create plan
+  - add candidate place
+  - both users vote
+  - finalize winning option
 
 ## Future Work
-- Add freshness TTL rules so cached external places can be selectively refreshed by age.
-- Add background sync / search analytics if needed for a larger demo.
-- Add pagination or infinite scroll for broader search result sets.
-- Add Google opening-hours enrichment if more detailed live availability becomes important.
+- Notifications/activity feed for new invites and vote changes.
+- Multi-stop finalized plans.
+- Share links and RSVP-style availability.
+- Comments/chat inside a plan.
+- Plan-level comments or lightweight chat.
+- Calendar/date availability for group coordination.

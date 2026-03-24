@@ -10,6 +10,7 @@ This repo now includes the next milestone features:
 - Role-based protected frontend routes and backend RBAC endpoints
 - Keyword-first search with sort options and Google Places fallback/cache
 - Saved-list favorites/bookmark UX and saved-list detail pages
+- Collaborative plans with friends, voting, and host finalization
 
 ## Stack
 - Frontend: Next.js App Router + Tailwind CSS
@@ -96,6 +97,7 @@ Run these in order:
 ```bash
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_23_01_add_internal_place_source.sql
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_23_02_live_search_schema.sql
+psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_24_01_collaborative_plans.sql
 ```
 
 This upgrade path adds the live-search metadata used by the current app:
@@ -106,8 +108,14 @@ This upgrade path adds the live-search metadata used by the current app:
 - `external_raw_json`
 - `is_seed_data`
 - `is_cached_from_external`
+- collaborative planning tables:
+  - `friendships`
+  - `plans`
+  - `plan_members`
+  - `plan_items`
+  - `plan_item_votes`
 
-It only alters the existing `places` table and adds supporting indexes, so it is safe for a database that already has the original project tables.
+The combined upgrade path keeps existing app data in place while adding live-search metadata and collaborative planning support.
 
 ### Local SQLite Demo Database
 
@@ -135,6 +143,10 @@ Public:
 Protected:
 - `/profile`
 - `/dashboard`
+- `/friends`
+- `/plans`
+- `/plans/new`
+- `/plans/[id]`
 - `/saved-lists`
 - `/saved-lists/[id]`
 - `/seller/dashboard` (seller/admin)
@@ -181,6 +193,33 @@ Route behavior:
 - `POST /saved-lists/{id}/items`
 - `DELETE /saved-lists/{id}/items/{place_id}`
 
+### Friends
+- `GET /friends/search`
+- `GET /friends`
+- `GET /friends/requests`
+- `POST /friends/request`
+- `POST /friends/request/{id}/accept`
+- `POST /friends/request/{id}/decline`
+- `DELETE /friends/{friend_id}`
+
+### Plans
+- `POST /plans`
+- `GET /plans`
+- `GET /plans/{id}`
+- `PUT /plans/{id}`
+- `DELETE /plans/{id}`
+- `POST /plans/{id}/invite`
+- `GET /plans/{id}/members`
+- `DELETE /plans/{id}/members/{user_id}`
+- `POST /plans/{id}/items`
+- `GET /plans/{id}/items`
+- `DELETE /plans/{id}/items/{plan_item_id}`
+- `POST /plans/items/{plan_item_id}/vote`
+- `PUT /plans/items/{plan_item_id}/vote`
+- `GET /plans/{id}/votes-summary`
+- `POST /plans/{id}/finalize`
+- `GET /plans/{id}/final-choice`
+
 ### Seller
 - `GET /seller/places`
 - `GET /seller/promotions`
@@ -224,9 +263,11 @@ Route behavior:
    - save place
 4. Open `/saved-lists` and `/saved-lists/{id}` and verify list/item state updates.
 5. Open `/profile` and verify account info + reviews + saved lists + saved places preview.
-6. Login as `seller` and use `/seller/dashboard` to create a place and then a promotion.
-7. Login as `admin` and open `/admin/dashboard`.
-8. Verify unauthorized access behavior for seller/admin pages.
+6. Open `/friends`, send a request, accept it with a second user, and confirm both friend lists update.
+7. Open `/plans`, create a shared plan, invite a friend, add place candidates, vote yes/no/maybe, and finalize the winner.
+8. Login as `seller` and use `/seller/dashboard` to create a place and then a promotion.
+9. Login as `admin` and open `/admin/dashboard`.
+10. Verify unauthorized access behavior for seller/admin pages and private social routes.
 
 ## Quality Checks
 

@@ -100,6 +100,12 @@ export default function DashboardPage() {
             <Link href="/profile" className="btn-secondary px-3 py-2 text-sm">
               Profile
             </Link>
+            <Link href="/plans" className="btn-secondary px-3 py-2 text-sm">
+              Plans
+            </Link>
+            <Link href="/friends" className="btn-secondary px-3 py-2 text-sm">
+              Friends
+            </Link>
             <Link href="/saved-lists" className="btn-secondary px-3 py-2 text-sm">
               Saved Lists
             </Link>
