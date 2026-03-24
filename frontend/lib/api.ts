@@ -20,6 +20,44 @@ import type {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+function extractErrorMessage(body: unknown): string | null {
+  if (!body) return null;
+
+  if (typeof body === "string") {
+    const trimmed = body.trim();
+    return trimmed || null;
+  }
+
+  if (Array.isArray(body)) {
+    const parts = body.map(extractErrorMessage).filter((part): part is string => Boolean(part));
+    return parts.length ? parts.join("; ") : null;
+  }
+
+  if (typeof body === "object") {
+    const record = body as Record<string, unknown>;
+
+    if ("detail" in record) {
+      return extractErrorMessage(record.detail);
+    }
+
+    if (typeof record.message === "string") {
+      return record.message;
+    }
+
+    if (typeof record.msg === "string") {
+      const location = Array.isArray(record.loc)
+        ? record.loc
+            .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
+            .join(".")
+        : null;
+
+      return location ? `${location}: ${record.msg}` : record.msg;
+    }
+  }
+
+  return null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -41,7 +79,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!response.ok) {
-    const detail = typeof body === "object" && body && "detail" in body ? (body as { detail: string }).detail : null;
+    const detail = extractErrorMessage(body);
     throw new Error(detail || `Request failed (${response.status})`);
   }
 

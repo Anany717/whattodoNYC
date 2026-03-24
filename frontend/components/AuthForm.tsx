@@ -33,20 +33,24 @@ export default function AuthForm({ mode }: Props) {
         setMessage(null);
 
         try {
+          if (isRegister && !fullName.trim()) {
+            throw new Error("Full name is required.");
+          }
+
           const body = isRegister
             ? await register({
-                full_name: fullName,
-                email,
+                full_name: fullName.trim(),
+                email: email.trim(),
                 password,
                 role
               })
-            : await login({ email, password });
+            : await login({ email: email.trim(), password });
 
           setToken(body.access_token);
           setMessage(`Success. You're now signed in.`);
           router.push("/dashboard");
         } catch (err) {
-          setError((err as Error).message);
+          setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
         }
       }}
     >
@@ -60,6 +64,7 @@ export default function AuthForm({ mode }: Props) {
           onChange={(event) => setFullName(event.target.value)}
           placeholder="Full name"
           required
+          minLength={2}
           className="field-input"
         />
       ) : null}
@@ -79,6 +84,7 @@ export default function AuthForm({ mode }: Props) {
         onChange={(event) => setPassword(event.target.value)}
         placeholder="Password"
         required
+        minLength={8}
         className="field-input"
       />
 
