@@ -9,8 +9,10 @@ This repo now includes the next milestone features:
 - Admin dashboard scaffold
 - Role-based protected frontend routes and backend RBAC endpoints
 - Keyword-first search with sort options and Google Places fallback/cache
+- Place card images using cached Google photo references with graceful fallback placeholders
 - Saved-list favorites/bookmark UX and saved-list detail pages
 - Collaborative plans with friends, voting, and host finalization
+- Multi-stop itinerary plans with ordered stops, stop types, and finalized outing timelines
 
 ## Stack
 - Frontend: Next.js App Router + Tailwind CSS
@@ -98,6 +100,7 @@ Run these in order:
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_23_01_add_internal_place_source.sql
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_23_02_live_search_schema.sql
 psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_24_01_collaborative_plans.sql
+psql "$SUPABASE_DATABASE_URL" -f backend/sql/upgrades/2026_03_25_01_place_images_itinerary.sql
 ```
 
 This upgrade path adds the live-search metadata used by the current app:
@@ -108,12 +111,23 @@ This upgrade path adds the live-search metadata used by the current app:
 - `external_raw_json`
 - `is_seed_data`
 - `is_cached_from_external`
+- image metadata on `places`:
+  - `image_url`
+  - `google_photo_reference`
+  - `photo_source`
+  - `image_last_synced_at`
+  - `external_photo_metadata`
 - collaborative planning tables:
   - `friendships`
   - `plans`
   - `plan_members`
   - `plan_items`
   - `plan_item_votes`
+- itinerary support on `plan_items`:
+  - `step_type`
+  - `order_index`
+  - `is_selected`
+  - `updated_at`
 
 The combined upgrade path keeps existing app data in place while adding live-search metadata and collaborative planning support.
 
@@ -213,12 +227,15 @@ Route behavior:
 - `DELETE /plans/{id}/members/{user_id}`
 - `POST /plans/{id}/items`
 - `GET /plans/{id}/items`
+- `PUT /plans/{id}/items/{plan_item_id}`
+- `PUT /plans/{id}/items/reorder`
 - `DELETE /plans/{id}/items/{plan_item_id}`
 - `POST /plans/items/{plan_item_id}/vote`
 - `PUT /plans/items/{plan_item_id}/vote`
 - `GET /plans/{id}/votes-summary`
 - `POST /plans/{id}/finalize`
 - `GET /plans/{id}/final-choice`
+- `GET /plans/{id}/itinerary`
 
 ### Seller
 - `GET /seller/places`
@@ -241,7 +258,7 @@ Route behavior:
   - live search was attempted
   - live search succeeded
   - live Google matches were used
-- Places store richer external metadata, including Google ratings and last sync time, so cached results still feel dynamic after the first fetch.
+- Places store richer external metadata, including Google ratings, last sync time, and Google photo references so cards can show real imagery when available.
 - Search supports:
   - `relevance`
   - `price_asc`
@@ -256,6 +273,7 @@ Route behavior:
 2. Open `/search`, run a keyword search, and verify:
    - recommendation cards
    - sorted search results
+   - card images with graceful fallback
    - saved heart/bookmark actions
 3. Open `/places/{id}` and:
    - submit or edit a review
@@ -264,7 +282,7 @@ Route behavior:
 4. Open `/saved-lists` and `/saved-lists/{id}` and verify list/item state updates.
 5. Open `/profile` and verify account info + reviews + saved lists + saved places preview.
 6. Open `/friends`, send a request, accept it with a second user, and confirm both friend lists update.
-7. Open `/plans`, create a shared plan, invite a friend, add place candidates, vote yes/no/maybe, and finalize the winner.
+7. Open `/plans`, create a shared plan, invite a friend, add multiple candidates with step types, vote yes/no/maybe, select itinerary stops, reorder them, and finalize the outing.
 8. Login as `seller` and use `/seller/dashboard` to create a place and then a promotion.
 9. Login as `admin` and open `/admin/dashboard`.
 10. Verify unauthorized access behavior for seller/admin pages and private social routes.

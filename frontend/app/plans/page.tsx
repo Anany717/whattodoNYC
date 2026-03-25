@@ -43,8 +43,8 @@ export default function PlansPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-700">Plans</p>
-            <h1 className="mt-1 font-display text-3xl font-bold text-slate-900">Coordinate the group plan</h1>
-            <p className="mt-2 text-sm text-slate-600">Create collaborative plans, invite friends, vote on options, and lock in the winner.</p>
+            <h1 className="mt-1 font-display text-3xl font-bold text-slate-900">Build a full group outing</h1>
+            <p className="mt-2 text-sm text-slate-600">Create collaborative itineraries, invite friends, vote on stops, and lock in the full night out.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/friends" className="btn-secondary px-4 py-2 text-sm">

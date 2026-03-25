@@ -25,6 +25,9 @@ from app.schemas import (
     PlanInviteCreate,
     PlanItemCreate,
     PlanItemOut,
+    PlanItemsReorder,
+    PlanItineraryOut,
+    PlanItemUpdate,
     PlanMemberOut,
     PlanOut,
     PlanSummaryOut,
@@ -34,9 +37,12 @@ from app.schemas import (
 )
 from app.services.plans import (
     get_member,
+    compute_suggested_itinerary,
+    compute_final_itinerary,
     get_plan_with_details,
     is_plan_member,
     serialize_final_choice,
+    serialize_itinerary,
     serialize_item,
     serialize_member,
     serialize_plan,
@@ -268,11 +274,18 @@ def add_plan_item(
     if existing:
         return serialize_plan(plan, current_user_id=current_user.id)
 
+    next_order_index = payload.order_index
+    if next_order_index is None:
+        next_order_index = max([item.order_index for item in plan.items], default=-1) + 1
+
     db.add(
         PlanItem(
             plan_id=plan_id,
             place_id=payload.place_id,
             added_by_user_id=current_user.id,
+            step_type=payload.step_type,
+            order_index=next_order_index,
+            is_selected=payload.is_selected,
             notes=payload.notes.strip() if payload.notes else None,
         )
     )
@@ -288,7 +301,72 @@ def get_plan_items(
 ) -> list[PlanItemOut]:
     plan = _get_plan_or_404(db, plan_id)
     _require_plan_member(plan, current_user.id)
-    return [serialize_item(item, current_user_id=current_user.id) for item in sorted(plan.items, key=lambda item: item.created_at)]
+    return [
+        serialize_item(item, current_user_id=current_user.id)
+        for item in sorted(plan.items, key=lambda item: (item.order_index, item.created_at))
+    ]
+
+
+@router.put("/plans/{plan_id}/items/reorder", response_model=PlanOut)
+def reorder_plan_items(
+    plan_id: str,
+    payload: PlanItemsReorder,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PlanOut:
+    plan = _get_plan_or_404(db, plan_id)
+    _require_plan_host(plan, current_user.id)
+
+    items_by_id = {item.id: item for item in plan.items}
+    for entry in payload.items:
+        item = items_by_id.get(entry.item_id)
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan item not found")
+        item.order_index = entry.order_index
+        db.add(item)
+
+    if plan.status == PlanStatus.finalized:
+        chosen = compute_final_itinerary(plan)
+        plan.final_place_id = chosen[0].place_id if chosen else None
+        db.add(plan)
+
+    db.commit()
+    return serialize_plan(_get_plan_or_404(db, plan_id), current_user_id=current_user.id)
+
+
+@router.put("/plans/{plan_id}/items/{plan_item_id}", response_model=PlanOut)
+def update_plan_item(
+    plan_id: str,
+    plan_item_id: str,
+    payload: PlanItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PlanOut:
+    plan = _get_plan_or_404(db, plan_id)
+    _require_plan_host(plan, current_user.id)
+
+    item = db.scalar(select(PlanItem).where(PlanItem.id == plan_item_id, PlanItem.plan_id == plan_id))
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan item not found")
+
+    if payload.step_type is not None:
+        item.step_type = payload.step_type
+    if payload.order_index is not None:
+        item.order_index = payload.order_index
+    if payload.is_selected is not None:
+        item.is_selected = payload.is_selected
+    if payload.notes is not None:
+        item.notes = payload.notes.strip() or None
+
+    db.add(item)
+    if plan.status == PlanStatus.finalized:
+        chosen = compute_final_itinerary(plan)
+        plan.final_place_id = chosen[0].place_id if chosen else None
+        if not chosen:
+            plan.status = PlanStatus.active
+        db.add(plan)
+    db.commit()
+    return serialize_plan(_get_plan_or_404(db, plan_id), current_user_id=current_user.id)
 
 
 @router.delete("/plans/{plan_id}/items/{plan_item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -305,9 +383,14 @@ def delete_plan_item(
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan item not found")
 
-    if plan.final_place_id == item.place_id:
-        plan.final_place_id = None
-        plan.status = PlanStatus.active
+    if item.is_selected or plan.final_place_id == item.place_id:
+        item.is_selected = False
+        remaining_selected = [
+            candidate for candidate in compute_final_itinerary(plan) if candidate.id != item.id
+        ]
+        plan.final_place_id = remaining_selected[0].place_id if remaining_selected else None
+        if not remaining_selected:
+            plan.status = PlanStatus.active
         db.add(plan)
 
     db.delete(item)
@@ -395,19 +478,27 @@ def finalize_plan(
     plan = _get_plan_or_404(db, plan_id)
     _require_plan_host(plan, current_user.id)
 
-    chosen_item = None
-    if payload.plan_item_id:
-        chosen_item = next((item for item in plan.items if item.id == payload.plan_item_id), None)
-        if not chosen_item:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan item not found")
+    chosen_items: list[PlanItem] = []
+    if payload.plan_item_ids:
+        chosen_ids = set(payload.plan_item_ids)
+        chosen_items = [item for item in plan.items if item.id in chosen_ids]
+        if len(chosen_items) != len(chosen_ids):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more plan items were not found")
     else:
-        summary = serialize_votes_summary(plan, current_user_id=current_user.id)
-        chosen_item = summary.leading_choice
+        chosen_items = compute_final_itinerary(plan)
+        if not chosen_items:
+            chosen_items = compute_suggested_itinerary(plan)
 
-    if not chosen_item:
+    if not chosen_items:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add at least one plan item before finalizing")
 
-    plan.final_place_id = chosen_item.place_id
+    chosen_ids = {item.id for item in chosen_items}
+    for item in plan.items:
+        item.is_selected = item.id in chosen_ids
+        db.add(item)
+
+    first_stop = min(chosen_items, key=lambda item: (item.order_index, item.created_at))
+    plan.final_place_id = first_stop.place_id
     plan.status = PlanStatus.finalized
     db.add(plan)
     db.commit()
@@ -423,3 +514,14 @@ def get_final_choice(
     plan = _get_plan_or_404(db, plan_id)
     _require_plan_member(plan, current_user.id)
     return serialize_final_choice(plan, current_user_id=current_user.id)
+
+
+@router.get("/plans/{plan_id}/itinerary", response_model=PlanItineraryOut)
+def get_itinerary(
+    plan_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PlanItineraryOut:
+    plan = _get_plan_or_404(db, plan_id)
+    _require_plan_member(plan, current_user.id)
+    return serialize_itinerary(plan, current_user_id=current_user.id)

@@ -71,6 +71,13 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+  CREATE TYPE plan_step_type AS ENUM ('food', 'activity', 'dessert', 'drinks', 'custom');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
 -- -------------------------
 -- USERS
 -- -------------------------
@@ -92,6 +99,11 @@ CREATE TABLE IF NOT EXISTS places (
   google_primary_type TEXT,
   google_rating DOUBLE PRECISION,
   google_user_ratings_total INTEGER,
+  image_url TEXT,
+  google_photo_reference TEXT,
+  photo_source TEXT,
+  image_last_synced_at TIMESTAMPTZ,
+  external_photo_metadata JSONB,
   source place_source NOT NULL DEFAULT 'internal',
   place_type place_type NOT NULL DEFAULT 'restaurant',
   name TEXT NOT NULL,
@@ -116,6 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_places_neighborhood ON places(neighborhood);
 CREATE INDEX IF NOT EXISTS idx_places_lat_lng ON places(lat, lng);
 CREATE INDEX IF NOT EXISTS idx_places_source ON places(source);
 CREATE INDEX IF NOT EXISTS idx_places_external_last_synced_at ON places(external_last_synced_at);
+CREATE INDEX IF NOT EXISTS idx_places_image_last_synced_at ON places(image_last_synced_at);
 
 -- -------------------------
 -- PLACE HOURS
@@ -300,8 +313,12 @@ CREATE TABLE IF NOT EXISTS plan_items (
   plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
   place_id UUID NOT NULL REFERENCES places(id) ON DELETE CASCADE,
   added_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  step_type plan_step_type NOT NULL DEFAULT 'custom',
+  order_index INTEGER NOT NULL DEFAULT 0,
+  is_selected BOOLEAN NOT NULL DEFAULT false,
   notes TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_items_plan_place
@@ -310,6 +327,8 @@ CREATE INDEX IF NOT EXISTS idx_plan_items_plan
   ON plan_items(plan_id);
 CREATE INDEX IF NOT EXISTS idx_plan_items_place
   ON plan_items(place_id);
+CREATE INDEX IF NOT EXISTS idx_plan_items_plan_order
+  ON plan_items(plan_id, order_index);
 
 CREATE TABLE IF NOT EXISTS plan_item_votes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

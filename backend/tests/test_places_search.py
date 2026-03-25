@@ -183,6 +183,8 @@ def test_search_attempts_live_google_even_when_internal_matches_exist(client, mo
             google_primary_type="restaurant",
             google_rating=4.7,
             google_user_ratings_total=820,
+            google_photo_reference="CnRnAAAA-demo-photo",
+            photo_source="google_places",
             source=PlaceSource.google,
             place_type=PlaceType.restaurant,
             name="Live East Village Thai Kitchen",
@@ -221,6 +223,7 @@ def test_search_attempts_live_google_even_when_internal_matches_exist(client, mo
     assert payload["live_result_count"] == 1
     assert any(item["search_source"] == "live_google" for item in payload["items"])
     assert any(item["name"] == "Live East Village Thai Kitchen" for item in payload["items"])
+    assert any(item["google_photo_reference"] == "CnRnAAAA-demo-photo" for item in payload["items"])
 
 
 def test_search_falls_back_cleanly_when_google_search_fails(client, monkeypatch):

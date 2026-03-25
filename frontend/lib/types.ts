@@ -12,6 +12,7 @@ export type PlanStatus = "draft" | "active" | "finalized" | "archived";
 export type PlanVisibility = "private" | "shared";
 export type PlanMemberRole = "host" | "collaborator";
 export type PlanVoteValue = "yes" | "no" | "maybe";
+export type PlanStepType = "food" | "activity" | "dessert" | "drinks" | "custom";
 
 export type UserSummary = {
   id: string;
@@ -35,6 +36,10 @@ export type Place = {
   google_primary_type: string | null;
   google_rating: number | null;
   google_user_ratings_total: number | null;
+  image_url: string | null;
+  google_photo_reference: string | null;
+  photo_source: string | null;
+  image_last_synced_at: string | null;
   source: "google" | "internal";
   place_type: PlaceType;
   name: string;
@@ -69,6 +74,10 @@ export type PlaceDetail = {
   google_primary_type: string | null;
   google_rating: number | null;
   google_user_ratings_total: number | null;
+  image_url: string | null;
+  google_photo_reference: string | null;
+  photo_source: string | null;
+  image_last_synced_at: string | null;
   name: string;
   formatted_address: string | null;
   neighborhood: string | null;
@@ -227,8 +236,12 @@ export type PlanItem = {
   plan_id: string;
   place_id: string;
   added_by_user_id: string;
+  step_type: PlanStepType;
+  order_index: number;
+  is_selected: boolean;
   notes: string | null;
   created_at: string;
+  updated_at: string;
   place: Place;
   added_by_user: UserSummary;
   votes: PlanItemVote[];
@@ -248,6 +261,8 @@ export type Plan = {
   host: UserSummary;
   members: PlanMember[];
   items: PlanItem[];
+  final_itinerary: PlanItem[];
+  suggested_itinerary: PlanItem[];
   final_choice: PlanItem | null;
   leading_choice: PlanItem | null;
 };
@@ -265,6 +280,9 @@ export type PlanSummary = {
   host: UserSummary;
   member_count: number;
   item_count: number;
+  selected_item_count: number;
+  final_itinerary: PlanItem[];
+  suggested_itinerary: PlanItem[];
   final_choice: PlanItem | null;
   leading_choice: PlanItem | null;
 };
@@ -273,13 +291,23 @@ export type PlanVotesSummaryResponse = {
   plan_id: string;
   items: PlanItem[];
   leading_choice: PlanItem | null;
+  suggested_itinerary: PlanItem[];
 };
 
 export type FinalChoiceResponse = {
   plan_id: string;
   status: PlanStatus;
+  final_itinerary: PlanItem[];
+  suggested_itinerary: PlanItem[];
   final_choice: PlanItem | null;
   leading_choice: PlanItem | null;
+};
+
+export type PlanItineraryResponse = {
+  plan_id: string;
+  status: PlanStatus;
+  final_itinerary: PlanItem[];
+  suggested_itinerary: PlanItem[];
 };
 
 export type PlanCreatePayload = {
@@ -296,6 +324,28 @@ export type PlanUpdatePayload = {
   visibility?: PlanVisibility;
 };
 
+export type PlanItemCreatePayload = {
+  place_id: string;
+  step_type?: PlanStepType;
+  order_index?: number;
+  is_selected?: boolean;
+  notes?: string;
+};
+
+export type PlanItemUpdatePayload = {
+  step_type?: PlanStepType;
+  order_index?: number;
+  is_selected?: boolean;
+  notes?: string;
+};
+
+export type PlanItemsReorderPayload = {
+  items: {
+    item_id: string;
+    order_index: number;
+  }[];
+};
+
 export type RecommendationRequest = {
   keywords: string;
   budget: 1 | 2 | 3 | 4;
@@ -309,11 +359,15 @@ export type RecommendationRequest = {
 export type RecommendationItem = {
   place_id: string;
   name: string;
+  place_type: PlaceType;
   price_level: number | null;
   formatted_address: string | null;
   source: "google" | "internal";
   google_rating: number | null;
   google_user_ratings_total: number | null;
+  image_url: string | null;
+  google_photo_reference: string | null;
+  photo_source: string | null;
   is_cached_from_external: boolean;
   lat: number;
   lng: number;

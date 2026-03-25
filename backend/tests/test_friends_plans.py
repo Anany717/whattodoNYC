@@ -105,13 +105,13 @@ def test_plan_voting_and_finalization_flow(client):
     add_first = client.post(
         f"/plans/{plan_id}/items",
         headers={"Authorization": f"Bearer {host_token}"},
-        json={"place_id": place_1, "notes": "Late-night pizza option"},
+        json={"place_id": place_1, "step_type": "food", "order_index": 0, "notes": "Late-night pizza option"},
     )
     assert add_first.status_code == 200
     add_second = client.post(
         f"/plans/{plan_id}/items",
         headers={"Authorization": f"Bearer {host_token}"},
-        json={"place_id": place_2, "notes": "Indoor backup plan"},
+        json={"place_id": place_2, "step_type": "activity", "order_index": 1, "notes": "Indoor backup plan"},
     )
     assert add_second.status_code == 200
 
@@ -146,6 +146,20 @@ def test_plan_voting_and_finalization_flow(client):
     )
     assert summary.status_code == 200
     assert summary.json()["leading_choice"]["place_id"] == place_1
+    assert len(summary.json()["suggested_itinerary"]) == 2
+
+    select_first = client.put(
+        f"/plans/{plan_id}/items/{item_ids[place_1]}",
+        headers={"Authorization": f"Bearer {host_token}"},
+        json={"is_selected": True},
+    )
+    assert select_first.status_code == 200
+    select_second = client.put(
+        f"/plans/{plan_id}/items/{item_ids[place_2]}",
+        headers={"Authorization": f"Bearer {host_token}"},
+        json={"is_selected": True},
+    )
+    assert select_second.status_code == 200
 
     finalize = client.post(
         f"/plans/{plan_id}/finalize",
@@ -154,6 +168,9 @@ def test_plan_voting_and_finalization_flow(client):
     )
     assert finalize.status_code == 200
     assert finalize.json()["final_choice"]["place_id"] == place_1
+    assert len(finalize.json()["final_itinerary"]) == 2
+    assert finalize.json()["final_itinerary"][0]["place_id"] == place_1
+    assert finalize.json()["final_itinerary"][1]["place_id"] == place_2
 
     final_choice = client.get(
         f"/plans/{plan_id}/final-choice",
@@ -161,3 +178,4 @@ def test_plan_voting_and_finalization_flow(client):
     )
     assert final_choice.status_code == 200
     assert final_choice.json()["final_choice"]["place_id"] == place_1
+    assert len(final_choice.json()["final_itinerary"]) == 2

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import PlaceImage from "@/components/PlaceImage";
 import SaveActions from "@/components/SaveActions";
 import type { RecommendationItem } from "@/lib/types";
 
@@ -11,6 +12,15 @@ type Props = {
 export default function ResultCard({ item, rank }: Props) {
   return (
     <article className="card p-5 transition hover:-translate-y-0.5">
+      <PlaceImage
+        place={{
+          name: item.name,
+          place_type: item.place_type,
+          image_url: item.image_url,
+          google_photo_reference: item.google_photo_reference,
+        }}
+        className="mb-4"
+      />
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-xl text-slate-900">

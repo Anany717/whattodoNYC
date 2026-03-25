@@ -85,6 +85,14 @@ class PlanVoteValue(str, enum.Enum):
     maybe = "maybe"
 
 
+class PlanStepType(str, enum.Enum):
+    food = "food"
+    activity = "activity"
+    dessert = "dessert"
+    drinks = "drinks"
+    custom = "custom"
+
+
 enum_values = lambda enum_cls: [item.value for item in enum_cls]  # noqa: E731
 
 
@@ -156,6 +164,11 @@ class Place(Base):
     google_primary_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     google_rating: Mapped[Optional[float]] = mapped_column(nullable=True)
     google_user_ratings_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    google_photo_reference: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    photo_source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    external_photo_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     source: Mapped[PlaceSource] = mapped_column(
         Enum(PlaceSource, native_enum=False, values_callable=enum_values),
         nullable=False,
@@ -480,8 +493,21 @@ class PlanItem(Base):
     plan_id: Mapped[str] = mapped_column(String(36), ForeignKey("plans.id"), nullable=False)
     place_id: Mapped[str] = mapped_column(String(36), ForeignKey("places.id"), nullable=False)
     added_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    step_type: Mapped[PlanStepType] = mapped_column(
+        Enum(PlanStepType, native_enum=False, values_callable=enum_values),
+        nullable=False,
+        default=PlanStepType.custom,
+    )
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
 
     __table_args__ = (UniqueConstraint("plan_id", "place_id", name="uq_plan_item_plan_place"),)
 

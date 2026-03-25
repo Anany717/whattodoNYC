@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import PlaceImage from "@/components/PlaceImage";
 import type { Place, PlaceDetail, PlaceSearchItem, RecommendationItem } from "@/lib/types";
 
 type PlaceLike = Place | PlaceDetail | PlaceSearchItem | RecommendationItem;
@@ -41,6 +42,8 @@ export default function PlaceCard({ place, subtitle, actions }: Props) {
 
   return (
     <article className="card p-5">
+      <PlaceImage place={place} className="mb-4" />
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-display text-lg font-semibold text-slate-900">{place.name}</h3>

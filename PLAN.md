@@ -1,12 +1,14 @@
 # WhatToDo NYC Collaborative Plans Plan
 
-Status: implemented for this update.
+Status: implemented, with final product polish added for place images and itinerary-style plans.
 
 ## Audit Findings
 - `saved_lists` currently support only private bookmarking and do not model collaboration, membership, or voting.
 - Auth, users, and place search flows already exist and are stable enough to reuse.
 - Place search already normalizes Google-backed results into `places`, which means plan items can reuse `place_id` without adding a second external-candidate model.
 - The cleanest path is to keep private saved lists intact and add first-class collaborative planning tables and routes beside them.
+- Google place search was already storing ratings and metadata, but it was not preserving photo references, so cards still felt text-heavy.
+- Plans already allowed multiple candidate items, but finalization still collapsed the outcome to one winning place instead of a full outing.
 
 ## Product Direction
 - Keep `saved_lists` as lightweight private organization.
@@ -27,8 +29,22 @@ Status: implemented for this update.
   - `plan_visibility`
   - `plan_member_role`
   - `plan_vote_value`
+- Add image metadata to `places`:
+  - `image_url`
+  - `google_photo_reference`
+  - `photo_source`
+  - `image_last_synced_at`
+  - `external_photo_metadata`
+- Add itinerary metadata to `plan_items`:
+  - `step_type`
+  - `order_index`
+  - `is_selected`
+  - `updated_at`
+- Add new SQL enum type:
+  - `plan_step_type`
 - Update fresh schema in `backend/sql/supabase_schema.sql`.
 - Add additive upgrade script in `backend/sql/upgrades/2026_03_24_01_collaborative_plans.sql`.
+- Add additive upgrade script in `backend/sql/upgrades/2026_03_25_01_place_images_itinerary.sql`.
 
 ## Backend Changes
 - Add friends routes for search, request, accept, decline, list, and remove.
@@ -47,6 +63,13 @@ Status: implemented for this update.
   - `backend/app/models.py`
   - `backend/app/schemas.py`
   - `backend/app/api/router.py`
+- Add Google photo-reference capture in `backend/app/services/google_places.py`.
+- Extend recommendations and search responses so place cards can receive image-ready data.
+- Extend plan endpoints to support:
+  - updating itinerary items
+  - reordering itinerary items
+  - finalizing multiple selected stops
+  - fetching a full itinerary response
 
 ## Frontend Changes
 - Add `/friends`, `/plans`, `/plans/new`, and `/plans/[id]`.
@@ -61,6 +84,13 @@ Status: implemented for this update.
   - `VoteButtons`
   - `FriendRequestCard`
 - Existing navigation/profile/dashboard pages now link into the collaborative planning flow.
+- Add shared `PlaceImage` rendering with graceful placeholder fallback.
+- Update `PlaceCard`, recommendation cards, and place detail layout to show images.
+- Refactor `/plans/[id]` into a multi-stop outing builder with:
+  - stop type selection
+  - “add to itinerary” toggles
+  - order controls
+  - final itinerary timeline
 
 ## What Was Built
 - Friends graph with search, request, accept/decline, list, and remove flow.
@@ -73,11 +103,18 @@ Status: implemented for this update.
   3. more maybe votes
 - Host-controlled finalization with a final choice banner in the UI.
 - Private saved lists preserved as lightweight personal organization.
+- Google-backed place photo references are now cached and exposed to the frontend.
+- Place cards now render real images when available and polished placeholders when not.
+- Plans now support full outing itineraries instead of only one winner.
+- Hosts can mark multiple selected stops, reorder them, and finalize the complete timeline.
+- Suggested itineraries are computed automatically by taking the strongest-voted option in each stop type when no manual selection exists.
 
 ## Validation
 - Backend tests added for:
   - friend request + accept flow
   - collaborative plan voting + finalization
+  - photo metadata flowing through search responses
+  - itinerary finalization preserving multiple stops
 - Frontend validation run:
   - `npm run lint`
   - `npm run build`
@@ -93,8 +130,9 @@ Status: implemented for this update.
 
 ## Future Work
 - Notifications/activity feed for new invites and vote changes.
-- Multi-stop finalized plans.
 - Share links and RSVP-style availability.
 - Comments/chat inside a plan.
 - Plan-level comments or lightweight chat.
 - Calendar/date availability for group coordination.
+- Richer internal image uploads for seller-created places.
+- Drag-and-drop itinerary reordering instead of button-based moves.

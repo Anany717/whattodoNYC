@@ -26,6 +26,7 @@ DETAIL_FIELDS = ",".join(
         "website",
         "rating",
         "user_ratings_total",
+        "photos",
         "types",
     ]
 )
@@ -202,6 +203,18 @@ def _normalize_google_result(
         if details_payload.get("user_ratings_total") is not None
         else item.get("user_ratings_total")
     )
+    photos = details_payload.get("photos") or item.get("photos") or []
+    photo_reference = None
+    photo_metadata = None
+    if isinstance(photos, list) and photos:
+        candidate = photos[0]
+        if isinstance(candidate, dict):
+            photo_reference = candidate.get("photo_reference")
+            photo_metadata = {
+                "width": candidate.get("width"),
+                "height": candidate.get("height"),
+                "html_attributions": candidate.get("html_attributions"),
+            }
 
     return {
         "google_place_id": google_place_id,
@@ -222,6 +235,10 @@ def _normalize_google_result(
             and google_user_ratings_total >= 0
             else None
         ),
+        "image_url": None,
+        "google_photo_reference": photo_reference if isinstance(photo_reference, str) and photo_reference else None,
+        "photo_source": "google_places" if photo_reference else None,
+        "external_photo_metadata": photo_metadata,
         "phone": details_payload.get("formatted_phone_number"),
         "website": details_payload.get("website"),
         "tags": _google_tags(types),
@@ -312,6 +329,22 @@ def _upsert_google_place(db: Session, payload: dict[str, Any]) -> Place | None:
         existing.google_primary_type = payload.get("google_primary_type")
         existing.google_rating = payload.get("google_rating")
         existing.google_user_ratings_total = payload.get("google_user_ratings_total")
+        if payload.get("image_url") and (not existing.image_url or existing.source == PlaceSource.google):
+            existing.image_url = payload.get("image_url")
+        if payload.get("google_photo_reference") and (
+            not existing.google_photo_reference or existing.source == PlaceSource.google
+        ):
+            existing.google_photo_reference = payload.get("google_photo_reference")
+        if payload.get("photo_source") and (
+            not existing.photo_source or existing.source == PlaceSource.google
+        ):
+            existing.photo_source = payload.get("photo_source")
+        if payload.get("external_photo_metadata") and (
+            not existing.external_photo_metadata or existing.source == PlaceSource.google
+        ):
+            existing.external_photo_metadata = payload.get("external_photo_metadata")
+        if payload.get("google_photo_reference") or payload.get("image_url"):
+            existing.image_last_synced_at = datetime.now(timezone.utc)
         existing.external_last_synced_at = datetime.now(timezone.utc)
         existing.external_raw_json = payload.get("external_raw_json")
         existing.is_cached_from_external = True
@@ -326,6 +359,13 @@ def _upsert_google_place(db: Session, payload: dict[str, Any]) -> Place | None:
         google_primary_type=payload.get("google_primary_type"),
         google_rating=payload.get("google_rating"),
         google_user_ratings_total=payload.get("google_user_ratings_total"),
+        image_url=payload.get("image_url"),
+        google_photo_reference=payload.get("google_photo_reference"),
+        photo_source=payload.get("photo_source"),
+        image_last_synced_at=datetime.now(timezone.utc)
+        if payload.get("google_photo_reference") or payload.get("image_url")
+        else None,
+        external_photo_metadata=payload.get("external_photo_metadata"),
         source=PlaceSource.google,
         place_type=payload["place_type"],
         name=payload["name"],

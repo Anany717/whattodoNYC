@@ -7,7 +7,10 @@ type Props = {
 };
 
 export default function PlanCard({ plan }: Props) {
-  const spotlight = plan.final_choice?.place.name || plan.leading_choice?.place.name || null;
+  const itineraryPreview =
+    (plan.final_itinerary.length ? plan.final_itinerary : plan.suggested_itinerary)
+      .slice(0, 3)
+      .map((item) => item.place.name);
 
   return (
     <article className="card p-5">
@@ -25,12 +28,14 @@ export default function PlanCard({ plan }: Props) {
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-600">
         <span>{plan.item_count} options</span>
+        <span>{plan.selected_item_count} selected stops</span>
         <span>{plan.visibility === "shared" ? "Shared plan" : "Private plan"}</span>
       </div>
 
-      {spotlight ? (
+      {itineraryPreview.length ? (
         <div className="mt-4 rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
-          {plan.final_choice ? "Final choice" : "Currently leading"}: <span className="font-semibold">{spotlight}</span>
+          {plan.final_itinerary.length ? "Final itinerary" : "Suggested itinerary"}:{" "}
+          <span className="font-semibold">{itineraryPreview.join(" -> ")}</span>
         </div>
       ) : null}
 

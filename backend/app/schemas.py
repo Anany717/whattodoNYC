@@ -10,6 +10,7 @@ from app.models import (
     FriendshipStatus,
     PlanMemberRole,
     PlanStatus,
+    PlanStepType,
     PlanVisibility,
     PlanVoteValue,
     PlaceSource,
@@ -74,6 +75,10 @@ class PlaceOut(BaseModel):
     google_primary_type: str | None = None
     google_rating: float | None = None
     google_user_ratings_total: int | None = None
+    image_url: str | None = None
+    google_photo_reference: str | None = None
+    photo_source: str | None = None
+    image_last_synced_at: datetime | None = None
     source: PlaceSource
     place_type: PlaceType
     name: str
@@ -98,6 +103,10 @@ class PlaceDetailOut(BaseModel):
     google_primary_type: str | None = None
     google_rating: float | None = None
     google_user_ratings_total: int | None = None
+    image_url: str | None = None
+    google_photo_reference: str | None = None
+    photo_source: str | None = None
+    image_last_synced_at: datetime | None = None
     name: str
     formatted_address: str | None
     neighborhood: str | None
@@ -298,7 +307,26 @@ class PlanInviteCreate(BaseModel):
 
 class PlanItemCreate(BaseModel):
     place_id: str
+    step_type: PlanStepType = PlanStepType.custom
+    order_index: int | None = Field(default=None, ge=0)
+    is_selected: bool = False
     notes: str | None = Field(default=None, max_length=280)
+
+
+class PlanItemUpdate(BaseModel):
+    step_type: PlanStepType | None = None
+    order_index: int | None = Field(default=None, ge=0)
+    is_selected: bool | None = None
+    notes: str | None = Field(default=None, max_length=280)
+
+
+class PlanItemReorderEntry(BaseModel):
+    item_id: str
+    order_index: int = Field(ge=0)
+
+
+class PlanItemsReorder(BaseModel):
+    items: list[PlanItemReorderEntry] = Field(default_factory=list)
 
 
 class PlanVoteCreate(BaseModel):
@@ -306,7 +334,7 @@ class PlanVoteCreate(BaseModel):
 
 
 class PlanFinalizeCreate(BaseModel):
-    plan_item_id: str | None = None
+    plan_item_ids: list[str] = Field(default_factory=list)
 
 
 class RecommendationRequest(BaseModel):
@@ -322,11 +350,15 @@ class RecommendationRequest(BaseModel):
 class RecommendationItem(BaseModel):
     place_id: str
     name: str
+    place_type: PlaceType
     price_level: int | None
     formatted_address: str | None = None
     source: PlaceSource
     google_rating: float | None = None
     google_user_ratings_total: int | None = None
+    image_url: str | None = None
+    google_photo_reference: str | None = None
+    photo_source: str | None = None
     is_cached_from_external: bool = False
     lat: float
     lng: float
@@ -374,8 +406,12 @@ class PlanItemOut(BaseModel):
     plan_id: str
     place_id: str
     added_by_user_id: str
+    step_type: PlanStepType
+    order_index: int
+    is_selected: bool
     notes: str | None = None
     created_at: datetime
+    updated_at: datetime
     place: PlaceOut
     added_by_user: UserSummary
     votes: list[PlanItemVoteOut] = Field(default_factory=list)
@@ -395,6 +431,8 @@ class PlanOut(BaseModel):
     host: UserSummary
     members: list[PlanMemberOut] = Field(default_factory=list)
     items: list[PlanItemOut] = Field(default_factory=list)
+    final_itinerary: list[PlanItemOut] = Field(default_factory=list)
+    suggested_itinerary: list[PlanItemOut] = Field(default_factory=list)
     final_choice: PlanItemOut | None = None
     leading_choice: PlanItemOut | None = None
 
@@ -412,6 +450,9 @@ class PlanSummaryOut(BaseModel):
     host: UserSummary
     member_count: int = 0
     item_count: int = 0
+    selected_item_count: int = 0
+    final_itinerary: list[PlanItemOut] = Field(default_factory=list)
+    suggested_itinerary: list[PlanItemOut] = Field(default_factory=list)
     final_choice: PlanItemOut | None = None
     leading_choice: PlanItemOut | None = None
 
@@ -420,10 +461,20 @@ class PlanVotesSummaryOut(BaseModel):
     plan_id: str
     items: list[PlanItemOut] = Field(default_factory=list)
     leading_choice: PlanItemOut | None = None
+    suggested_itinerary: list[PlanItemOut] = Field(default_factory=list)
 
 
 class FinalChoiceOut(BaseModel):
     plan_id: str
     status: PlanStatus
+    final_itinerary: list[PlanItemOut] = Field(default_factory=list)
+    suggested_itinerary: list[PlanItemOut] = Field(default_factory=list)
     final_choice: PlanItemOut | None = None
     leading_choice: PlanItemOut | None = None
+
+
+class PlanItineraryOut(BaseModel):
+    plan_id: str
+    status: PlanStatus
+    final_itinerary: list[PlanItemOut] = Field(default_factory=list)
+    suggested_itinerary: list[PlanItemOut] = Field(default_factory=list)

@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import EmptyState from "@/components/EmptyState";
+import PlaceImage from "@/components/PlaceImage";
 import ReviewCard from "@/components/ReviewCard";
 import ReviewForm from "@/components/ReviewForm";
 import SaveActions from "@/components/SaveActions";
@@ -114,20 +115,25 @@ export default function PlaceDetailPage() {
     <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[2fr,1fr]">
       <section className="space-y-6">
         <article className="card p-6">
-          <h1 className="font-display text-3xl font-bold text-slate-900">{place.name}</h1>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {place.is_cached_from_external ? (
-              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-                Google-backed place data
-              </span>
-            ) : null}
-            {place.is_seed_data ? (
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                Local catalog listing
-              </span>
-            ) : null}
+          <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+            <PlaceImage place={place} aspectClassName="aspect-[4/3]" />
+            <div>
+              <h1 className="font-display text-3xl font-bold text-slate-900">{place.name}</h1>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {place.is_cached_from_external ? (
+                  <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                    Google-backed place data
+                  </span>
+                ) : null}
+                {place.is_seed_data ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    Local catalog listing
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-2 text-sm text-slate-600">{place.formatted_address || "Address unavailable"}</p>
+            </div>
           </div>
-          <p className="mt-2 text-sm text-slate-600">{place.formatted_address || "Address unavailable"}</p>
 
           <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-3">
             <p>

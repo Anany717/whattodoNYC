@@ -5,14 +5,18 @@ import type {
   FriendRequestsResponse,
   FriendsListEntry,
   Friendship,
+  PlanItineraryResponse,
   Place,
   PlaceCreatePayload,
   PlaceDetail,
   PlaceSearchResponse,
   Plan,
   PlanCreatePayload,
+  PlanItemCreatePayload,
   PlanItem,
+  PlanItemsReorderPayload,
   PlanSummary,
+  PlanItemUpdatePayload,
   PlanUpdatePayload,
   PlanVoteValue,
   PlanVotesSummaryResponse,
@@ -372,7 +376,7 @@ export function removePlanMember(token: string, planId: string, userId: string) 
   });
 }
 
-export function addPlanItem(token: string, planId: string, payload: { place_id: string; notes?: string }) {
+export function addPlanItem(token: string, planId: string, payload: PlanItemCreatePayload) {
   return request<Plan>(`/plans/${planId}/items`, {
     method: "POST",
     headers: authHeaders(token),
@@ -383,6 +387,22 @@ export function addPlanItem(token: string, planId: string, payload: { place_id: 
 export function getPlanItems(token: string, planId: string) {
   return request<PlanItem[]>(`/plans/${planId}/items`, {
     headers: authHeaders(token),
+  });
+}
+
+export function updatePlanItem(token: string, planId: string, planItemId: string, payload: PlanItemUpdatePayload) {
+  return request<Plan>(`/plans/${planId}/items/${planItemId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function reorderPlanItems(token: string, planId: string, payload: PlanItemsReorderPayload) {
+  return request<Plan>(`/plans/${planId}/items/reorder`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -415,16 +435,22 @@ export function getPlanVotesSummary(token: string, planId: string) {
   });
 }
 
-export function finalizePlan(token: string, planId: string, planItemId?: string) {
+export function finalizePlan(token: string, planId: string, planItemIds?: string[]) {
   return request<FinalChoiceResponse>(`/plans/${planId}/finalize`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify(planItemId ? { plan_item_id: planItemId } : {}),
+    body: JSON.stringify(planItemIds?.length ? { plan_item_ids: planItemIds } : {}),
   });
 }
 
 export function getPlanFinalChoice(token: string, planId: string) {
   return request<FinalChoiceResponse>(`/plans/${planId}/final-choice`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function getPlanItinerary(token: string, planId: string) {
+  return request<PlanItineraryResponse>(`/plans/${planId}/itinerary`, {
     headers: authHeaders(token),
   });
 }

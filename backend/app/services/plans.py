@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import Plan, PlanItem, PlanItemVote, PlanMember, PlanVoteValue
 from app.schemas import (
     FinalChoiceOut,
+    PlanItineraryOut,
     PlanItemOut,
     PlanItemVoteOut,
     PlanMemberOut,
@@ -52,10 +53,35 @@ def _vote_sort_key(item: PlanItem) -> tuple[int, int, int]:
     return (yes_count, -no_count, maybe_count)
 
 
+def _item_sort_key(item: PlanItem) -> tuple[int, str]:
+    return (item.order_index, item.created_at.isoformat())
+
+
 def compute_leading_item(plan: Plan) -> PlanItem | None:
     if not plan.items:
         return None
-    return max(plan.items, key=_vote_sort_key)
+    return max(plan.items, key=lambda item: (_vote_sort_key(item), -item.order_index))
+
+
+def compute_final_itinerary(plan: Plan) -> list[PlanItem]:
+    return sorted([item for item in plan.items if item.is_selected], key=_item_sort_key)
+
+
+def compute_suggested_itinerary(plan: Plan) -> list[PlanItem]:
+    selected = compute_final_itinerary(plan)
+    if selected:
+        return selected
+
+    winners_by_step: dict[str, PlanItem] = {}
+    for item in plan.items:
+        current = winners_by_step.get(item.step_type.value)
+        if not current or (_vote_sort_key(item), -item.order_index) > (
+            _vote_sort_key(current),
+            -current.order_index,
+        ):
+            winners_by_step[item.step_type.value] = item
+
+    return sorted(winners_by_step.values(), key=_item_sort_key)
 
 
 def summarize_votes(item: PlanItem, current_user_id: str | None = None) -> VoteSummaryOut:
@@ -93,8 +119,12 @@ def serialize_item(item: PlanItem, current_user_id: str | None = None) -> PlanIt
         plan_id=item.plan_id,
         place_id=item.place_id,
         added_by_user_id=item.added_by_user_id,
+        step_type=item.step_type,
+        order_index=item.order_index,
+        is_selected=item.is_selected,
         notes=item.notes,
         created_at=item.created_at,
+        updated_at=item.updated_at,
         place=PlaceOut.model_validate(item.place),
         added_by_user=UserSummary.model_validate(item.added_by_user),
         votes=[serialize_vote(vote) for vote in sorted(item.votes, key=lambda vote: vote.created_at)],
@@ -114,7 +144,9 @@ def serialize_member(member: PlanMember) -> PlanMemberOut:
 
 def serialize_plan(plan: Plan, current_user_id: str | None = None) -> PlanOut:
     leading_item = compute_leading_item(plan)
-    final_item = next((item for item in plan.items if plan.final_place_id and item.place_id == plan.final_place_id), None)
+    final_itinerary = compute_final_itinerary(plan)
+    suggested_itinerary = compute_suggested_itinerary(plan)
+    final_item = final_itinerary[0] if final_itinerary else None
     return PlanOut(
         id=plan.id,
         host_user_id=plan.host_user_id,
@@ -127,7 +159,9 @@ def serialize_plan(plan: Plan, current_user_id: str | None = None) -> PlanOut:
         updated_at=plan.updated_at,
         host=UserSummary.model_validate(plan.host),
         members=[serialize_member(member) for member in sorted(plan.members, key=lambda member: member.joined_at)],
-        items=[serialize_item(item, current_user_id=current_user_id) for item in sorted(plan.items, key=lambda item: item.created_at)],
+        items=[serialize_item(item, current_user_id=current_user_id) for item in sorted(plan.items, key=_item_sort_key)],
+        final_itinerary=[serialize_item(item, current_user_id=current_user_id) for item in final_itinerary],
+        suggested_itinerary=[serialize_item(item, current_user_id=current_user_id) for item in suggested_itinerary],
         final_choice=serialize_item(final_item, current_user_id=current_user_id) if final_item else None,
         leading_choice=serialize_item(leading_item, current_user_id=current_user_id) if leading_item else None,
     )
@@ -135,7 +169,9 @@ def serialize_plan(plan: Plan, current_user_id: str | None = None) -> PlanOut:
 
 def serialize_plan_summary(plan: Plan, current_user_id: str | None = None) -> PlanSummaryOut:
     leading_item = compute_leading_item(plan)
-    final_item = next((item for item in plan.items if plan.final_place_id and item.place_id == plan.final_place_id), None)
+    final_itinerary = compute_final_itinerary(plan)
+    suggested_itinerary = compute_suggested_itinerary(plan)
+    final_item = final_itinerary[0] if final_itinerary else None
     return PlanSummaryOut(
         id=plan.id,
         host_user_id=plan.host_user_id,
@@ -149,6 +185,9 @@ def serialize_plan_summary(plan: Plan, current_user_id: str | None = None) -> Pl
         host=UserSummary.model_validate(plan.host),
         member_count=len(plan.members),
         item_count=len(plan.items),
+        selected_item_count=len(final_itinerary),
+        final_itinerary=[serialize_item(item, current_user_id=current_user_id) for item in final_itinerary],
+        suggested_itinerary=[serialize_item(item, current_user_id=current_user_id) for item in suggested_itinerary],
         final_choice=serialize_item(final_item, current_user_id=current_user_id) if final_item else None,
         leading_choice=serialize_item(leading_item, current_user_id=current_user_id) if leading_item else None,
     )
@@ -158,17 +197,40 @@ def serialize_votes_summary(plan: Plan, current_user_id: str | None = None) -> P
     leading_item = compute_leading_item(plan)
     return PlanVotesSummaryOut(
         plan_id=plan.id,
-        items=[serialize_item(item, current_user_id=current_user_id) for item in sorted(plan.items, key=lambda item: item.created_at)],
+        items=[serialize_item(item, current_user_id=current_user_id) for item in sorted(plan.items, key=_item_sort_key)],
         leading_choice=serialize_item(leading_item, current_user_id=current_user_id) if leading_item else None,
+        suggested_itinerary=[
+            serialize_item(item, current_user_id=current_user_id)
+            for item in compute_suggested_itinerary(plan)
+        ],
     )
 
 
 def serialize_final_choice(plan: Plan, current_user_id: str | None = None) -> FinalChoiceOut:
     leading_item = compute_leading_item(plan)
-    final_item = next((item for item in plan.items if plan.final_place_id and item.place_id == plan.final_place_id), None)
+    final_itinerary = compute_final_itinerary(plan)
+    suggested_itinerary = compute_suggested_itinerary(plan)
+    final_item = final_itinerary[0] if final_itinerary else None
     return FinalChoiceOut(
         plan_id=plan.id,
         status=plan.status,
+        final_itinerary=[serialize_item(item, current_user_id=current_user_id) for item in final_itinerary],
+        suggested_itinerary=[serialize_item(item, current_user_id=current_user_id) for item in suggested_itinerary],
         final_choice=serialize_item(final_item, current_user_id=current_user_id) if final_item else None,
         leading_choice=serialize_item(leading_item, current_user_id=current_user_id) if leading_item else None,
+    )
+
+
+def serialize_itinerary(plan: Plan, current_user_id: str | None = None) -> PlanItineraryOut:
+    return PlanItineraryOut(
+        plan_id=plan.id,
+        status=plan.status,
+        final_itinerary=[
+            serialize_item(item, current_user_id=current_user_id)
+            for item in compute_final_itinerary(plan)
+        ],
+        suggested_itinerary=[
+            serialize_item(item, current_user_id=current_user_id)
+            for item in compute_suggested_itinerary(plan)
+        ],
     )
