@@ -19,6 +19,7 @@ export default function ResultCard({ item, rank }: Props) {
           image_url: item.image_url,
           google_photo_reference: item.google_photo_reference,
         }}
+        aspectClassName="aspect-[16/9]"
         className="mb-4"
       />
       <div className="mb-3 flex items-start justify-between gap-3">

@@ -191,6 +191,7 @@ export default function ResultsClient() {
                 key={place.id}
                 place={place}
                 subtitle={place.match_summary || undefined}
+                variant="compact"
                 actions={<SaveActions placeId={place.id} />}
               />
             ))

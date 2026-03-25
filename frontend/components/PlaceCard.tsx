@@ -9,9 +9,10 @@ type Props = {
   place: PlaceLike;
   subtitle?: string;
   actions?: React.ReactNode;
+  variant?: "default" | "compact";
 };
 
-export default function PlaceCard({ place, subtitle, actions }: Props) {
+export default function PlaceCard({ place, subtitle, actions, variant = "default" }: Props) {
   const hasAddress = "formatted_address" in place;
   const hasType = "place_type" in place;
   const hasPrice = "price_level" in place;
@@ -40,10 +41,19 @@ export default function PlaceCard({ place, subtitle, actions }: Props) {
           : "Externally refreshed"
         : null;
 
-  return (
-    <article className="card p-5">
+  const imageNode =
+    variant === "compact" ? (
+      <PlaceImage
+        place={place}
+        aspectClassName="aspect-[16/9] md:aspect-auto"
+        className="h-full rounded-none"
+      />
+    ) : (
       <PlaceImage place={place} className="mb-4" />
+    );
 
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="font-display text-lg font-semibold text-slate-900">{place.name}</h3>
@@ -91,6 +101,24 @@ export default function PlaceCard({ place, subtitle, actions }: Props) {
         </Link>
         {actions ? <div>{actions}</div> : null}
       </div>
+    </>
+  );
+
+  if (variant === "compact") {
+    return (
+      <article className="card overflow-hidden p-0">
+        <div className="grid md:grid-cols-[240px,1fr]">
+          <div className="min-h-[190px] bg-slate-100 md:min-h-full">{imageNode}</div>
+          <div className="p-5">{content}</div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="card p-5">
+      {imageNode}
+      {content}
     </article>
   );
 }
