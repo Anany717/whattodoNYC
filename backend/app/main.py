@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import Base, engine, ensure_sqlite_compatibility_schema
 
 
 Base.metadata.create_all(bind=engine)
+ensure_sqlite_compatibility_schema()
 
 app = FastAPI(title=settings.app_name)
 
