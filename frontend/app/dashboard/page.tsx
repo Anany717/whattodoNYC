@@ -19,6 +19,8 @@ import type { User } from "@/lib/types";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{
     managedPlaces: number;
     promotions: number;
@@ -36,34 +38,64 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
+    let mounted = true;
+
     const load = async () => {
       const token = getToken();
-      if (!token) return;
-      const me = await loadCurrentUser();
-      setUser(me);
-      if (!me) return;
-
-      if (me.role === "seller") {
-        const [places, promotions] = await Promise.all([getSellerPlaces(token), getSellerPromotions(token)]);
-        setStats((prev) => ({ ...prev, managedPlaces: places.length, promotions: promotions.length }));
+      if (!token) {
+        if (mounted) setLoading(false);
+        return;
       }
 
-      if (me.role === "admin") {
-        const [users, places, reviews] = await Promise.all([
-          getAdminUsers(token),
-          getAdminPlaces(token),
-          getAdminReviews(token)
-        ]);
-        setStats((prev) => ({ ...prev, users: users.length, places: places.length, reviews: reviews.length }));
-      }
+      try {
+        const me = await loadCurrentUser();
+        if (!mounted) return;
+        setUser(me);
+        if (!me) {
+          setLoading(false);
+          return;
+        }
 
-      if (me.role === "customer" || me.role === "reviewer") {
-        const [savedLists, reviews] = await Promise.all([getMySavedLists(token), getMyReviews(token)]);
-        setStats((prev) => ({ ...prev, savedLists: savedLists.length, reviews: reviews.length }));
+        if (me.role === "seller") {
+          const [places, promotions] = await Promise.all([getSellerPlaces(token), getSellerPromotions(token)]);
+          if (!mounted) return;
+          setStats((prev) => ({ ...prev, managedPlaces: places.length, promotions: promotions.length }));
+        }
+
+        if (me.role === "admin") {
+          const [users, places, reviews] = await Promise.all([
+            getAdminUsers(token),
+            getAdminPlaces(token),
+            getAdminReviews(token)
+          ]);
+          if (!mounted) return;
+          setStats((prev) => ({ ...prev, users: users.length, places: places.length, reviews: reviews.length }));
+        }
+
+        if (me.role === "customer" || me.role === "reviewer") {
+          const [savedLists, reviews] = await Promise.all([getMySavedLists(token), getMyReviews(token)]);
+          if (!mounted) return;
+          setStats((prev) => ({ ...prev, savedLists: savedLists.length, reviews: reviews.length }));
+        }
+
+        if (mounted) {
+          setError(null);
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Could not load dashboard data.");
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    load();
+    void load();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
@@ -71,6 +103,12 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         <h1 className="font-display text-3xl font-bold text-slate-900">Dashboard</h1>
         <p className="mt-2 text-sm text-slate-600">Welcome back. Use this dashboard to jump into your role-specific tools.</p>
+        {loading ? <p className="mt-4 text-sm text-slate-500">Loading dashboard data...</p> : null}
+        {error ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {error}
+          </div>
+        ) : null}
 
         <section className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {user?.role === "seller" ? (
