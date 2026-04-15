@@ -35,6 +35,7 @@ from app.schemas import (
     PlanVoteCreate,
     PlanVotesSummaryOut,
 )
+from app.services.google_places import ensure_places_have_photos
 from app.services.plans import (
     get_member,
     compute_suggested_itinerary,
@@ -139,6 +140,8 @@ def get_plans(
         ).all()
     )
     plans = [_get_plan_or_404(db, plan_id) for plan_id in plan_ids]
+    for plan in plans:
+        ensure_places_have_photos(db, [item.place for item in plan.items], limit=3)
     plans.sort(key=lambda plan: plan.updated_at, reverse=True)
     return [serialize_plan_summary(plan, current_user_id=current_user.id) for plan in plans]
 
@@ -151,6 +154,7 @@ def get_plan(
 ) -> PlanOut:
     plan = _get_plan_or_404(db, plan_id)
     _require_plan_member(plan, current_user.id)
+    ensure_places_have_photos(db, [item.place for item in plan.items], limit=4)
     return serialize_plan(plan, current_user_id=current_user.id)
 
 
@@ -369,13 +373,13 @@ def update_plan_item(
     return serialize_plan(_get_plan_or_404(db, plan_id), current_user_id=current_user.id)
 
 
-@router.delete("/plans/{plan_id}/items/{plan_item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/plans/{plan_id}/items/{plan_item_id}", response_model=PlanOut)
 def delete_plan_item(
     plan_id: str,
     plan_item_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Response:
+) -> PlanOut:
     plan = _get_plan_or_404(db, plan_id)
     _require_plan_host(plan, current_user.id)
 
@@ -395,7 +399,7 @@ def delete_plan_item(
 
     db.delete(item)
     db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return serialize_plan(_get_plan_or_404(db, plan_id), current_user_id=current_user.id)
 
 
 def _upsert_vote(
@@ -403,7 +407,7 @@ def _upsert_vote(
     payload: PlanVoteCreate,
     db: Session,
     current_user: User,
-) -> PlanItemOut:
+) -> PlanOut:
     item = db.get(PlanItem, plan_item_id)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan item not found")
@@ -431,29 +435,26 @@ def _upsert_vote(
     db.commit()
 
     refreshed = _get_plan_or_404(db, item.plan_id)
-    refreshed_item = next((candidate for candidate in refreshed.items if candidate.id == plan_item_id), None)
-    if not refreshed_item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan item not found")
-    return serialize_item(refreshed_item, current_user_id=current_user.id)
+    return serialize_plan(refreshed, current_user_id=current_user.id)
 
 
-@router.post("/plans/items/{plan_item_id}/vote", response_model=PlanItemOut)
+@router.post("/plans/items/{plan_item_id}/vote", response_model=PlanOut)
 def create_plan_vote(
     plan_item_id: str,
     payload: PlanVoteCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PlanItemOut:
+) -> PlanOut:
     return _upsert_vote(plan_item_id, payload, db, current_user)
 
 
-@router.put("/plans/items/{plan_item_id}/vote", response_model=PlanItemOut)
+@router.put("/plans/items/{plan_item_id}/vote", response_model=PlanOut)
 def update_plan_vote(
     plan_item_id: str,
     payload: PlanVoteCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PlanItemOut:
+) -> PlanOut:
     return _upsert_vote(plan_item_id, payload, db, current_user)
 
 
@@ -468,13 +469,13 @@ def get_votes_summary(
     return serialize_votes_summary(plan, current_user_id=current_user.id)
 
 
-@router.post("/plans/{plan_id}/finalize", response_model=FinalChoiceOut)
+@router.post("/plans/{plan_id}/finalize", response_model=PlanOut)
 def finalize_plan(
     plan_id: str,
     payload: PlanFinalizeCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> FinalChoiceOut:
+) -> PlanOut:
     plan = _get_plan_or_404(db, plan_id)
     _require_plan_host(plan, current_user.id)
 
@@ -502,7 +503,7 @@ def finalize_plan(
     plan.status = PlanStatus.finalized
     db.add(plan)
     db.commit()
-    return serialize_final_choice(_get_plan_or_404(db, plan_id), current_user_id=current_user.id)
+    return serialize_plan(_get_plan_or_404(db, plan_id), current_user_id=current_user.id)
 
 
 @router.get("/plans/{plan_id}/final-choice", response_model=FinalChoiceOut)

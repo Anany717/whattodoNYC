@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -33,6 +33,8 @@ DETAIL_FIELDS = ",".join(
 NYC_HINTS = ("new york", "nyc", "manhattan", "brooklyn", "queens", "bronx", "staten island")
 NYC_CENTER = (40.7411, -73.9897)
 DETAIL_ENRICH_LIMIT = 6
+PHOTO_ENRICH_LIMIT = 4
+PHOTO_REFRESH_INTERVAL = timedelta(hours=24)
 logger = logging.getLogger(__name__)
 
 
@@ -203,18 +205,9 @@ def _normalize_google_result(
         if details_payload.get("user_ratings_total") is not None
         else item.get("user_ratings_total")
     )
-    photos = details_payload.get("photos") or item.get("photos") or []
-    photo_reference = None
-    photo_metadata = None
-    if isinstance(photos, list) and photos:
-        candidate = photos[0]
-        if isinstance(candidate, dict):
-            photo_reference = candidate.get("photo_reference")
-            photo_metadata = {
-                "width": candidate.get("width"),
-                "height": candidate.get("height"),
-                "html_attributions": candidate.get("html_attributions"),
-            }
+    photo_reference, photo_metadata = _extract_photo_fields(
+        details_payload.get("photos") or item.get("photos") or []
+    )
 
     return {
         "google_place_id": google_place_id,
@@ -247,6 +240,69 @@ def _normalize_google_result(
             "details": details_payload or None,
         },
     }
+
+
+def ensure_places_have_photos(db: Session, places: list[Place], limit: int = PHOTO_ENRICH_LIMIT) -> None:
+    if not settings.google_places_api_key:
+        return
+
+    candidates: list[Place] = []
+    for place in places:
+        if not _should_attempt_photo_enrichment(place):
+            continue
+        candidates.append(place)
+        if len(candidates) >= limit:
+            break
+
+    if not candidates:
+        return
+
+    changed = False
+    for place in candidates:
+        if ensure_place_has_photo(db, place):
+            changed = True
+
+    if changed:
+        db.commit()
+
+
+def ensure_place_has_photo(db: Session, place: Place) -> bool:
+    if not settings.google_places_api_key or not _should_attempt_photo_enrichment(place):
+        return False
+
+    now = datetime.now(timezone.utc)
+
+    if place.google_place_id:
+        details = _fetch_place_details(place.google_place_id)
+        if details:
+            photo_reference, photo_metadata = _extract_photo_fields(details.get("photos") or [])
+            if photo_reference:
+                _apply_photo_fields(place, photo_reference, photo_metadata, now)
+                db.add(place)
+                return True
+
+        place.image_last_synced_at = now
+        db.add(place)
+        return True
+
+    fetch_result = fetch_and_cache_google_places(
+        db,
+        query=place.name,
+        lat=place.lat,
+        lng=place.lng,
+        radius_km=2,
+        limit=5,
+    )
+    refreshed = db.get(Place, place.id)
+    if refreshed and (refreshed.google_photo_reference or refreshed.image_url):
+        return True
+
+    if not fetch_result.succeeded:
+        return False
+
+    place.image_last_synced_at = now
+    db.add(place)
+    return True
 
 
 def _map_place_type(types: list[str]) -> PlaceType:
@@ -400,6 +456,49 @@ def _find_similar_place(db: Session, payload: dict[str, Any]) -> Place | None:
         if haversine_km(candidate.lat, candidate.lng, payload["lat"], payload["lng"]) <= 0.15:
             return candidate
     return None
+
+
+def _extract_photo_fields(photos: Any) -> tuple[str | None, dict[str, Any] | None]:
+    if not isinstance(photos, list) or not photos:
+        return None, None
+
+    candidate = photos[0]
+    if not isinstance(candidate, dict):
+        return None, None
+
+    photo_reference = candidate.get("photo_reference")
+    if not isinstance(photo_reference, str) or not photo_reference:
+        return None, None
+
+    return photo_reference, {
+        "width": candidate.get("width"),
+        "height": candidate.get("height"),
+        "html_attributions": candidate.get("html_attributions"),
+    }
+
+
+def _apply_photo_fields(
+    place: Place,
+    photo_reference: str,
+    photo_metadata: dict[str, Any] | None,
+    synced_at: datetime,
+) -> None:
+    place.google_photo_reference = photo_reference
+    if not place.photo_source or place.photo_source == "google_places":
+        place.photo_source = "google_places"
+    if photo_metadata:
+        place.external_photo_metadata = photo_metadata
+    place.image_last_synced_at = synced_at
+
+
+def _should_attempt_photo_enrichment(place: Place) -> bool:
+    if place.image_url or place.google_photo_reference:
+        return False
+    if not place.name:
+        return False
+    if place.image_last_synced_at is None:
+        return True
+    return place.image_last_synced_at <= datetime.now(timezone.utc) - PHOTO_REFRESH_INTERVAL
 
 
 def _sync_tags(db: Session, place: Place, names: list[str]) -> None:

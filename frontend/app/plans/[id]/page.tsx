@@ -57,27 +57,88 @@ export default function PlanDetailPage() {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const refreshPlan = useCallback(async () => {
+    const token = getToken();
+    if (!token) return null;
+    const planData = await getPlan(token, params.id);
+    setPlan(planData);
+    return planData;
+  }, [params.id]);
+
+  const loadSupportData = useCallback(async () => {
     const token = getToken();
     if (!token) return;
+    const [friendsData, me] = await Promise.all([getFriends(token), loadCurrentUser()]);
+    setFriends(friendsData);
+    setCurrentUser(me);
+  }, []);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [planData, friendsData, me] = await Promise.all([
-        getPlan(token, params.id),
-        getFriends(token),
-        loadCurrentUser(),
-      ]);
-      setPlan(planData);
-      setFriends(friendsData);
-      setCurrentUser(me);
+      await Promise.all([refreshPlan(), loadSupportData()]);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [params.id]);
+  }, [loadSupportData, refreshPlan]);
+
+  const runPlanAction = useCallback(
+    async (
+      key: string,
+      action: () => Promise<Plan>,
+      successMessage?: string
+    ) => {
+      setBusyAction(key);
+      setActionMessage(null);
+      setError(null);
+      try {
+        const nextPlan = await action();
+        setPlan(nextPlan);
+        if (successMessage) {
+          setActionMessage(successMessage);
+        }
+        return nextPlan;
+      } catch (err) {
+        setError((err as Error).message);
+        throw err;
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    []
+  );
+
+  const isBusy = busyAction !== null;
+
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setError(null);
+    setActionMessage(null);
+    try {
+      const response = await searchPlaces({
+        query: searchQuery.trim(),
+        lat: DEFAULT_LAT,
+        lng: DEFAULT_LNG,
+        radius_km: 12,
+        sort_by: "relevance",
+      });
+      setSearchResults(response.items);
+      if (!response.items.length) {
+        setActionMessage("No places matched yet. Try a broader keyword or a different stop type.");
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     void loadData();
@@ -99,6 +160,15 @@ export default function PlanDetailPage() {
       ),
     [plan?.items]
   );
+  const groupedItems = useMemo(
+    () =>
+      STEP_OPTIONS.map((option) => ({
+        option,
+        items: orderedItems.filter((item) => item.step_type === option.value),
+      })).filter((section) => section.items.length),
+    [orderedItems]
+  );
+  const searchResultsPreview = useMemo(() => searchResults.slice(0, 8), [searchResults]);
   const itineraryItems = plan?.final_itinerary.length ? plan.final_itinerary : plan?.suggested_itinerary || [];
 
   const moveItem = useCallback(
@@ -116,12 +186,16 @@ export default function PlanDetailPage() {
       const [moved] = reordered.splice(currentIndex, 1);
       reordered.splice(targetIndex, 0, moved);
 
-      await reorderPlanItems(token, plan.id, {
-        items: reordered.map((item, index) => ({ item_id: item.id, order_index: index })),
-      });
-      await loadData();
+      await runPlanAction(
+        `reorder-${itemId}`,
+        () =>
+          reorderPlanItems(token, plan.id, {
+            items: reordered.map((entry, index) => ({ item_id: entry.id, order_index: index })),
+          }),
+        "Updated the stop order."
+      );
     },
-    [loadData, orderedItems, plan]
+    [orderedItems, plan, runPlanAction]
   );
 
   const renderItineraryStops = (items: PlanItem[], emptyTitle: string, emptyDescription: string) => {
@@ -170,6 +244,7 @@ export default function PlanDetailPage() {
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
         {loading ? <p className="text-sm text-slate-600">Loading plan...</p> : null}
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {actionMessage ? <p className="text-sm text-emerald-700">{actionMessage}</p> : null}
         {!loading && !plan ? <EmptyState title="Plan not found" description="This plan could not be loaded." /> : null}
 
         {plan ? (
@@ -199,6 +274,11 @@ export default function PlanDetailPage() {
                     ? "These are the selected stops for the night, ordered as the itinerary."
                     : "We pick the strongest option in each stop type, then keep the order easy to follow."}
                 </p>
+                {!plan.final_itinerary.length && plan.leading_choice ? (
+                  <p className="mt-3 text-sm font-medium text-emerald-800">
+                    Currently leading: {plan.leading_choice.place.name}
+                  </p>
+                ) : null}
               </article>
 
               <article className="card p-5">
@@ -218,25 +298,33 @@ export default function PlanDetailPage() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
+                      disabled={isBusy}
                       className="btn-primary px-4 py-2 text-sm"
                       onClick={async () => {
                         const token = getToken();
                         if (!token) return;
                         const selectedIds = orderedItems.filter((item) => item.is_selected).map((item) => item.id);
-                        await finalizePlan(token, plan.id, selectedIds.length ? selectedIds : undefined);
-                        await loadData();
+                        await runPlanAction(
+                          "finalize-plan",
+                          () => finalizePlan(token, plan.id, selectedIds.length ? selectedIds : undefined),
+                          "Itinerary finalized."
+                        );
                       }}
                     >
                       {plan.final_itinerary.length ? "Refresh finalized itinerary" : "Finalize itinerary"}
                     </button>
                     <button
                       type="button"
+                      disabled={isBusy}
                       className="btn-secondary px-4 py-2 text-sm"
                       onClick={async () => {
                         const token = getToken();
                         if (!token) return;
-                        await finalizePlan(token, plan.id);
-                        await loadData();
+                        await runPlanAction(
+                          "auto-finalize-plan",
+                          () => finalizePlan(token, plan.id),
+                          "Suggested itinerary applied."
+                        );
                       }}
                     >
                       Auto-build from votes
@@ -299,26 +387,9 @@ export default function PlanDetailPage() {
                     </select>
                     <button
                       type="button"
+                      disabled={searching || isBusy}
                       className="btn-primary px-4 py-2 text-sm"
-                      onClick={async () => {
-                        if (!searchQuery.trim()) return;
-                        setSearching(true);
-                        try {
-                          const response = await searchPlaces({
-                            query: searchQuery.trim(),
-                            lat: DEFAULT_LAT,
-                            lng: DEFAULT_LNG,
-                            radius_km: 12,
-                            sort_by: "relevance",
-                          });
-                          setSearchResults(response.items);
-                          setError(null);
-                        } catch (err) {
-                          setError((err as Error).message);
-                        } finally {
-                          setSearching(false);
-                        }
-                      }}
+                      onClick={() => void handleSearch()}
                     >
                       {searching ? "Searching..." : "Search places"}
                     </button>
@@ -333,7 +404,7 @@ export default function PlanDetailPage() {
                   </label>
 
                   <div className="mt-4 grid gap-3">
-                    {searchResults.map((result) => (
+                    {searchResultsPreview.map((result) => (
                       <article key={result.id} className="rounded-2xl border border-slate-100 bg-white/70 p-4">
                         <div className="grid gap-4 md:grid-cols-[180px_1fr]">
                           <PlaceImage place={result} aspectClassName="aspect-[4/3]" />
@@ -360,18 +431,24 @@ export default function PlanDetailPage() {
                               </div>
                               <button
                                 type="button"
+                                disabled={isBusy}
                                 className="btn-secondary px-3 py-2 text-sm"
                                 onClick={async () => {
                                   const token = getToken();
                                   if (!token) return;
-                                  await addPlanItem(token, plan.id, {
-                                    place_id: result.id,
-                                    step_type: newStepType,
-                                    is_selected: addSelectedNow,
-                                    notes: searchNote.trim() || undefined,
-                                  });
+                                  await runPlanAction(
+                                    `add-${result.id}`,
+                                    () =>
+                                      addPlanItem(token, plan.id, {
+                                        place_id: result.id,
+                                        step_type: newStepType,
+                                        is_selected: addSelectedNow,
+                                        notes: searchNote.trim() || undefined,
+                                      }),
+                                    `${result.name} added to the plan.`
+                                  );
                                   setSearchNote("");
-                                  await loadData();
+                                  setSearchResults((current) => current.filter((entry) => entry.id !== result.id));
                                 }}
                               >
                                 Add to plan
@@ -381,6 +458,12 @@ export default function PlanDetailPage() {
                         </div>
                       </article>
                     ))}
+                    {!searching && searchQuery.trim() && !searchResultsPreview.length ? (
+                      <EmptyState
+                        title="No matching stops yet"
+                        description="Try a broader keyword, or search for a nearby neighborhood or place type."
+                      />
+                    ) : null}
                   </div>
                 </article>
 
@@ -392,62 +475,76 @@ export default function PlanDetailPage() {
                     </span>
                   </div>
                   {orderedItems.length ? (
-                    orderedItems.map((item, index) => (
-                      <PlanItemCard
-                        key={item.id}
-                        item={item}
-                        isHost={isHost}
-                        onVote={async (vote: PlanVoteValue) => {
-                          const token = getToken();
-                          if (!token) return;
-                          await voteOnPlanItem(token, item.id, vote);
-                          await loadData();
-                        }}
-                        onStepTypeChange={
-                          isHost
-                            ? async (stepType) => {
+                    groupedItems.map((section) => (
+                      <div key={section.option.value} className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-brand-700">
+                            {section.option.label}
+                          </h3>
+                          <span className="text-xs text-slate-500">{section.items.length} options</span>
+                        </div>
+                        {section.items.map((item) => {
+                          const index = orderedItems.findIndex((entry) => entry.id === item.id);
+                          return (
+                            <PlanItemCard
+                              key={item.id}
+                              item={item}
+                              isHost={isHost}
+                              disabled={isBusy}
+                              onVote={async (vote: PlanVoteValue) => {
                                 const token = getToken();
                                 if (!token) return;
-                                await updatePlanItem(token, plan.id, item.id, { step_type: stepType });
-                                await loadData();
+                                await runPlanAction(`vote-${item.id}`, () => voteOnPlanItem(token, item.id, vote));
+                              }}
+                              onStepTypeChange={
+                                isHost
+                                  ? async (stepType) => {
+                                      const token = getToken();
+                                      if (!token) return;
+                                      await runPlanAction(
+                                        `step-type-${item.id}`,
+                                        () => updatePlanItem(token, plan.id, item.id, { step_type: stepType }),
+                                        "Updated the stop type."
+                                      );
+                                    }
+                                  : undefined
                               }
-                            : undefined
-                        }
-                        onToggleSelected={
-                          isHost
-                            ? async () => {
-                                const token = getToken();
-                                if (!token) return;
-                                await updatePlanItem(token, plan.id, item.id, { is_selected: !item.is_selected });
-                                await loadData();
+                              onToggleSelected={
+                                isHost
+                                  ? async () => {
+                                      const token = getToken();
+                                      if (!token) return;
+                                      await runPlanAction(
+                                        `toggle-${item.id}`,
+                                        () => updatePlanItem(token, plan.id, item.id, { is_selected: !item.is_selected }),
+                                        item.is_selected ? "Removed from the itinerary." : "Added to the itinerary."
+                                      );
+                                    }
+                                  : undefined
                               }
-                            : undefined
-                        }
-                        onMoveUp={
-                          isHost && index > 0
-                            ? async () => {
-                                await moveItem(item.id, -1);
+                              onMoveUp={isHost && index > 0 ? async () => void moveItem(item.id, -1) : undefined}
+                              onMoveDown={
+                                isHost && index < orderedItems.length - 1
+                                  ? async () => void moveItem(item.id, 1)
+                                  : undefined
                               }
-                            : undefined
-                        }
-                        onMoveDown={
-                          isHost && index < orderedItems.length - 1
-                            ? async () => {
-                                await moveItem(item.id, 1);
+                              onRemove={
+                                isHost
+                                  ? async () => {
+                                      const token = getToken();
+                                      if (!token) return;
+                                      await runPlanAction(
+                                        `remove-${item.id}`,
+                                        () => deletePlanItem(token, plan.id, item.id),
+                                        "Removed the stop from the plan."
+                                      );
+                                    }
+                                  : undefined
                               }
-                            : undefined
-                        }
-                        onRemove={
-                          isHost
-                            ? async () => {
-                                const token = getToken();
-                                if (!token) return;
-                                await deletePlanItem(token, plan.id, item.id);
-                                await loadData();
-                              }
-                            : undefined
-                        }
-                      />
+                            />
+                          );
+                        })}
+                      </div>
                     ))
                   ) : (
                     <EmptyState title="No stops yet" description="Search for places above and add a few food or activity options for the group." />
@@ -480,13 +577,17 @@ export default function PlanDetailPage() {
                         </select>
                         <button
                           type="button"
+                          disabled={isBusy || !inviteUserId}
                           className="btn-primary mt-3 px-4 py-2 text-sm"
                           onClick={async () => {
                             const token = getToken();
                             if (!token || !inviteUserId) return;
-                            await invitePlanMember(token, plan.id, inviteUserId);
+                            await runPlanAction(
+                              `invite-${inviteUserId}`,
+                              () => invitePlanMember(token, plan.id, inviteUserId),
+                              "Friend added to the plan."
+                            );
                             setInviteUserId("");
-                            await loadData();
                           }}
                         >
                           Invite to plan

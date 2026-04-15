@@ -7,6 +7,7 @@ import type { PlanItem, PlanStepType, PlanVoteValue } from "@/lib/types";
 type Props = {
   item: PlanItem;
   isHost?: boolean;
+  disabled?: boolean;
   onVote: (vote: PlanVoteValue) => Promise<void>;
   onStepTypeChange?: (stepType: PlanStepType) => Promise<void>;
   onToggleSelected?: () => Promise<void>;
@@ -18,6 +19,7 @@ type Props = {
 export default function PlanItemCard({
   item,
   isHost,
+  disabled,
   onVote,
   onStepTypeChange,
   onToggleSelected,
@@ -63,6 +65,7 @@ export default function PlanItemCard({
                 Stop type
                 <select
                   value={item.step_type}
+                  disabled={disabled}
                   onChange={(event) => void onStepTypeChange(event.target.value as PlanStepType)}
                   className="field-select mt-2"
                 >
@@ -85,7 +88,7 @@ export default function PlanItemCard({
 
           <div className="mt-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Your vote</p>
-            <VoteButtons value={item.vote_summary.current_user_vote} onVote={onVote} />
+            <VoteButtons value={item.vote_summary.current_user_vote} disabled={disabled} onVote={onVote} />
           </div>
 
           <div className="mt-5">
@@ -107,22 +110,22 @@ export default function PlanItemCard({
             <p className="text-xs text-slate-500">Added by {item.added_by_user.full_name}</p>
             <div className="flex flex-wrap gap-2">
               {isHost && onMoveUp ? (
-                <button type="button" onClick={() => void onMoveUp()} className="btn-secondary px-3 py-2 text-sm">
+                <button type="button" disabled={disabled} onClick={() => void onMoveUp()} className="btn-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60">
                   Move up
                 </button>
               ) : null}
               {isHost && onMoveDown ? (
-                <button type="button" onClick={() => void onMoveDown()} className="btn-secondary px-3 py-2 text-sm">
+                <button type="button" disabled={disabled} onClick={() => void onMoveDown()} className="btn-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60">
                   Move down
                 </button>
               ) : null}
               {isHost && onToggleSelected ? (
-                <button type="button" onClick={() => void onToggleSelected()} className="btn-primary px-3 py-2 text-sm">
+                <button type="button" disabled={disabled} onClick={() => void onToggleSelected()} className="btn-primary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60">
                   {item.is_selected ? "Remove from itinerary" : "Add to itinerary"}
                 </button>
               ) : null}
               {isHost && onRemove ? (
-                <button type="button" onClick={() => void onRemove()} className="btn-secondary px-3 py-2 text-sm">
+                <button type="button" disabled={disabled} onClick={() => void onRemove()} className="btn-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60">
                   Remove option
                 </button>
               ) : null}

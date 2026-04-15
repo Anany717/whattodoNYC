@@ -418,14 +418,14 @@ export function reorderPlanItems(token: string, planId: string, payload: PlanIte
 }
 
 export function deletePlanItem(token: string, planId: string, planItemId: string) {
-  return request<void>(`/plans/${planId}/items/${planItemId}`, {
+  return request<Plan>(`/plans/${planId}/items/${planItemId}`, {
     method: "DELETE",
     headers: authHeaders(token),
   });
 }
 
 export function voteOnPlanItem(token: string, planItemId: string, vote: PlanVoteValue) {
-  return request<PlanItem>(`/plans/items/${planItemId}/vote`, {
+  return request<Plan>(`/plans/items/${planItemId}/vote`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ vote }),
@@ -433,7 +433,7 @@ export function voteOnPlanItem(token: string, planItemId: string, vote: PlanVote
 }
 
 export function updatePlanItemVote(token: string, planItemId: string, vote: PlanVoteValue) {
-  return request<PlanItem>(`/plans/items/${planItemId}/vote`, {
+  return request<Plan>(`/plans/items/${planItemId}/vote`, {
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify({ vote }),
@@ -447,7 +447,7 @@ export function getPlanVotesSummary(token: string, planId: string) {
 }
 
 export function finalizePlan(token: string, planId: string, planItemIds?: string[]) {
-  return request<FinalChoiceResponse>(`/plans/${planId}/finalize`, {
+  return request<Plan>(`/plans/${planId}/finalize`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(planItemIds?.length ? { plan_item_ids: planItemIds } : {}),

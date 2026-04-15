@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import Place, PlaceTag
 from app.schemas import RecommendationItem, RecommendationRequest
-from app.services.google_places import fetch_and_cache_google_places
+from app.services.google_places import ensure_places_have_photos, fetch_and_cache_google_places
 from app.services.place_metrics import (
     active_promotion_boost,
     authenticity_score,
@@ -57,7 +57,7 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
     candidates = _load_candidates(db)
 
     weather = get_weather_snapshot(db, lat=req.lat, lng=req.lng)
-    scored: list[tuple[RecommendationItem, float]] = []
+    scored: list[tuple[RecommendationItem, float, Place]] = []
 
     for place in candidates:
         distance_km = haversine_km(req.lat, req.lng, place.lat, place.lng)
@@ -95,10 +95,16 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
             score=round(score, 3),
             why=why,
         )
-        scored.append((item, score))
+        scored.append((item, score, place))
 
     scored.sort(key=lambda entry: (entry[1], entry[0].distance_km * -1), reverse=True)
-    return [item for item, _ in scored[:10]]
+    top_candidates = scored[:10]
+    ensure_places_have_photos(db, [place for _, _, place in top_candidates])
+    for item, _, place in top_candidates:
+        item.image_url = place.image_url
+        item.google_photo_reference = place.google_photo_reference
+        item.photo_source = place.photo_source
+    return [item for item, _, _ in top_candidates]
 
 
 def _load_candidates(db: Session) -> list[Place]:

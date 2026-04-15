@@ -7,7 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Place, PlaceSource, PlaceTag
-from app.services.google_places import GooglePlacesFetchResult, fetch_and_cache_google_places
+from app.services.google_places import (
+    GooglePlacesFetchResult,
+    ensure_places_have_photos,
+    fetch_and_cache_google_places,
+)
 from app.services.place_metrics import (
     active_promotion_boost,
     authenticity_score,
@@ -102,6 +106,7 @@ def run_place_search(
         has_query=has_query,
     )
     deduped_matches = _dedupe_matches(sorted_matches)
+    ensure_places_have_photos(db, [match.place for match in deduped_matches[:limit]])
     return SearchExecution(
         matches=deduped_matches[:limit],
         google_results_used=bool(live_result_place_ids),

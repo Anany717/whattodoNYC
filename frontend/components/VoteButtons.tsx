@@ -23,7 +23,7 @@ export default function VoteButtons({ value, disabled, onVote }: Props) {
             type="button"
             disabled={disabled}
             onClick={() => void onVote(option.value)}
-            className={active ? "btn-primary px-3 py-2 text-sm" : "btn-secondary px-3 py-2 text-sm"}
+            className={`${active ? "btn-primary" : "btn-secondary"} px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {option.label}
           </button>

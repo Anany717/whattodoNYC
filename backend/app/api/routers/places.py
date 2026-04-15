@@ -19,6 +19,7 @@ from app.schemas import (
     ReviewOut,
     SearchSortBy,
 )
+from app.services.google_places import ensure_place_has_photo
 from app.services.place_metrics import authenticity_score, average_rating, review_count
 from app.services.search_service import run_place_search
 
@@ -88,6 +89,10 @@ def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceDetailOut:
     )
     if not place:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Place not found")
+
+    if ensure_place_has_photo(db, place):
+        db.commit()
+        db.refresh(place)
 
     tags = [place_tag.tag.name for place_tag in place.tags if place_tag.tag]
     return PlaceDetailOut(
