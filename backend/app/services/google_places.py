@@ -498,7 +498,10 @@ def _should_attempt_photo_enrichment(place: Place) -> bool:
         return False
     if place.image_last_synced_at is None:
         return True
-    return place.image_last_synced_at <= datetime.now(timezone.utc) - PHOTO_REFRESH_INTERVAL
+    last_synced_at = place.image_last_synced_at
+    if last_synced_at.tzinfo is None:
+        last_synced_at = last_synced_at.replace(tzinfo=timezone.utc)
+    return last_synced_at <= datetime.now(timezone.utc) - PHOTO_REFRESH_INTERVAL
 
 
 def _sync_tags(db: Session, place: Place, names: list[str]) -> None:
