@@ -18,13 +18,15 @@ from app.models import (
     UserRole,
 )
 
+class AppModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-class TokenResponse(BaseModel):
+class TokenResponse(AppModel):
     access_token: str
     token_type: str = "bearer"
 
 
-class UserSummary(BaseModel):
+class UserSummary(AppModel):
     id: str
     full_name: str
     email: EmailStr
@@ -33,7 +35,7 @@ class UserSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserBase(BaseModel):
+class UserBase(AppModel):
     full_name: str
     email: EmailStr
     role: UserRole
@@ -43,7 +45,7 @@ class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=128)
 
 
-class UserLogin(BaseModel):
+class UserLogin(AppModel):
     email: EmailStr
     password: str
 
@@ -52,12 +54,12 @@ class UserOut(UserSummary):
     created_at: datetime
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(AppModel):
     full_name: str | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
-class PlaceCreate(BaseModel):
+class PlaceCreate(AppModel):
     place_type: PlaceType
     name: str
     formatted_address: str | None = None
@@ -69,7 +71,7 @@ class PlaceCreate(BaseModel):
     website: str | None = None
 
 
-class PlaceOut(BaseModel):
+class PlaceOut(AppModel):
     id: str
     google_place_id: str | None
     google_primary_type: str | None = None
@@ -97,7 +99,7 @@ class PlaceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PlaceDetailOut(BaseModel):
+class PlaceDetailOut(AppModel):
     id: str
     google_place_id: str | None = None
     google_primary_type: str | None = None
@@ -147,7 +149,7 @@ class PlaceSearchItemOut(PlaceOut):
     is_live_result: bool = False
 
 
-class PlaceSearchOut(BaseModel):
+class PlaceSearchOut(AppModel):
     items: list[PlaceSearchItemOut]
     sort_by: SearchSortBy = "relevance"
     google_results_used: bool = False
@@ -157,7 +159,7 @@ class PlaceSearchOut(BaseModel):
     status_message: str | None = None
 
 
-class ReviewCreate(BaseModel):
+class ReviewCreate(AppModel):
     place_id: str
     rating_overall: int = Field(ge=1, le=5)
     rating_value: int | None = Field(default=None, ge=1, le=5)
@@ -166,7 +168,7 @@ class ReviewCreate(BaseModel):
     comment: str | None = None
 
 
-class ReviewUpdate(BaseModel):
+class ReviewUpdate(AppModel):
     rating_overall: int = Field(ge=1, le=5)
     rating_value: int | None = Field(default=None, ge=1, le=5)
     rating_vibe: int | None = Field(default=None, ge=1, le=5)
@@ -174,7 +176,7 @@ class ReviewUpdate(BaseModel):
     comment: str | None = None
 
 
-class ReviewOut(BaseModel):
+class ReviewOut(AppModel):
     id: str
     user_id: str
     place_id: str
@@ -192,19 +194,19 @@ class UserReviewOut(ReviewOut):
     place_name: str
 
 
-class AuthenticityVoteIn(BaseModel):
+class AuthenticityVoteIn(AppModel):
     place_id: str
     label: AuthenticityLabel
 
 
-class AuthenticityOut(BaseModel):
+class AuthenticityOut(AppModel):
     place_id: str
     authentic_count: int
     touristy_count: int
     score: float
 
 
-class PromotionCreate(BaseModel):
+class PromotionCreate(AppModel):
     place_id: str
     title: str
     description: str | None = None
@@ -221,7 +223,7 @@ class PromotionCreate(BaseModel):
         return value
 
 
-class PromotionOut(BaseModel):
+class PromotionOut(AppModel):
     id: str
     place_id: str
     seller_user_id: str
@@ -234,15 +236,15 @@ class PromotionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SavedListCreate(BaseModel):
+class SavedListCreate(AppModel):
     name: str
 
 
-class SavedListItemCreate(BaseModel):
+class SavedListItemCreate(AppModel):
     place_id: str
 
 
-class SavedListItemOut(BaseModel):
+class SavedListItemOut(AppModel):
     list_id: str
     place_id: str
     created_at: datetime
@@ -251,7 +253,7 @@ class SavedListItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SavedListOut(BaseModel):
+class SavedListOut(AppModel):
     id: str
     user_id: str
     name: str
@@ -261,11 +263,11 @@ class SavedListOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class FriendshipCreate(BaseModel):
+class FriendshipCreate(AppModel):
     addressee_user_id: str
 
 
-class FriendshipOut(BaseModel):
+class FriendshipOut(AppModel):
     id: str
     requester_user_id: str
     addressee_user_id: str
@@ -276,36 +278,36 @@ class FriendshipOut(BaseModel):
     addressee: UserSummary
 
 
-class FriendsListEntry(BaseModel):
+class FriendsListEntry(AppModel):
     friendship_id: str
     friend: UserSummary
     created_at: datetime
 
 
-class FriendRequestsOut(BaseModel):
+class FriendRequestsOut(AppModel):
     incoming: list[FriendshipOut] = Field(default_factory=list)
     outgoing: list[FriendshipOut] = Field(default_factory=list)
 
 
-class PlanCreate(BaseModel):
+class PlanCreate(AppModel):
     title: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     visibility: PlanVisibility = PlanVisibility.shared
     invited_user_ids: list[str] = Field(default_factory=list)
 
 
-class PlanUpdate(BaseModel):
+class PlanUpdate(AppModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
     status: PlanStatus | None = None
     visibility: PlanVisibility | None = None
 
 
-class PlanInviteCreate(BaseModel):
+class PlanInviteCreate(AppModel):
     user_id: str
 
 
-class PlanItemCreate(BaseModel):
+class PlanItemCreate(AppModel):
     place_id: str
     step_type: PlanStepType = PlanStepType.custom
     order_index: int | None = Field(default=None, ge=0)
@@ -313,31 +315,31 @@ class PlanItemCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=280)
 
 
-class PlanItemUpdate(BaseModel):
+class PlanItemUpdate(AppModel):
     step_type: PlanStepType | None = None
     order_index: int | None = Field(default=None, ge=0)
     is_selected: bool | None = None
     notes: str | None = Field(default=None, max_length=280)
 
 
-class PlanItemReorderEntry(BaseModel):
+class PlanItemReorderEntry(AppModel):
     item_id: str
     order_index: int = Field(ge=0)
 
 
-class PlanItemsReorder(BaseModel):
+class PlanItemsReorder(AppModel):
     items: list[PlanItemReorderEntry] = Field(default_factory=list)
 
 
-class PlanVoteCreate(BaseModel):
+class PlanVoteCreate(AppModel):
     vote: PlanVoteValue
 
 
-class PlanFinalizeCreate(BaseModel):
+class PlanFinalizeCreate(AppModel):
     plan_item_ids: list[str] = Field(default_factory=list)
 
 
-class RecommendationRequest(BaseModel):
+class RecommendationRequest(AppModel):
     keywords: str
     budget: int = Field(ge=1, le=4)
     group_size: int = Field(ge=1)
@@ -347,7 +349,7 @@ class RecommendationRequest(BaseModel):
     radius_km: float = Field(gt=0)
 
 
-class RecommendationItem(BaseModel):
+class RecommendationItem(AppModel):
     place_id: str
     name: str
     place_type: PlaceType
@@ -367,11 +369,11 @@ class RecommendationItem(BaseModel):
     why: str
 
 
-class RecommendationResponse(BaseModel):
+class RecommendationResponse(AppModel):
     results: list[RecommendationItem]
 
 
-class VoteSummaryOut(BaseModel):
+class VoteSummaryOut(AppModel):
     yes_count: int = 0
     no_count: int = 0
     maybe_count: int = 0
@@ -379,7 +381,7 @@ class VoteSummaryOut(BaseModel):
     current_user_vote: PlanVoteValue | None = None
 
 
-class PlanItemVoteOut(BaseModel):
+class PlanItemVoteOut(AppModel):
     id: str
     plan_item_id: str
     user_id: str
@@ -391,7 +393,7 @@ class PlanItemVoteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PlanMemberOut(BaseModel):
+class PlanMemberOut(AppModel):
     plan_id: str
     user_id: str
     role: PlanMemberRole
@@ -401,7 +403,7 @@ class PlanMemberOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PlanItemOut(BaseModel):
+class PlanItemOut(AppModel):
     id: str
     plan_id: str
     place_id: str
@@ -418,7 +420,7 @@ class PlanItemOut(BaseModel):
     vote_summary: VoteSummaryOut = Field(default_factory=VoteSummaryOut)
 
 
-class PlanOut(BaseModel):
+class PlanOut(AppModel):
     id: str
     host_user_id: str
     title: str
@@ -437,7 +439,7 @@ class PlanOut(BaseModel):
     leading_choice: PlanItemOut | None = None
 
 
-class PlanSummaryOut(BaseModel):
+class PlanSummaryOut(AppModel):
     id: str
     host_user_id: str
     title: str
@@ -457,14 +459,14 @@ class PlanSummaryOut(BaseModel):
     leading_choice: PlanItemOut | None = None
 
 
-class PlanVotesSummaryOut(BaseModel):
+class PlanVotesSummaryOut(AppModel):
     plan_id: str
     items: list[PlanItemOut] = Field(default_factory=list)
     leading_choice: PlanItemOut | None = None
     suggested_itinerary: list[PlanItemOut] = Field(default_factory=list)
 
 
-class FinalChoiceOut(BaseModel):
+class FinalChoiceOut(AppModel):
     plan_id: str
     status: PlanStatus
     final_itinerary: list[PlanItemOut] = Field(default_factory=list)
@@ -473,7 +475,7 @@ class FinalChoiceOut(BaseModel):
     leading_choice: PlanItemOut | None = None
 
 
-class PlanItineraryOut(BaseModel):
+class PlanItineraryOut(AppModel):
     plan_id: str
     status: PlanStatus
     final_itinerary: list[PlanItemOut] = Field(default_factory=list)
