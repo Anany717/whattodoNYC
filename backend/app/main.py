@@ -5,12 +5,11 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine, ensure_sqlite_compatibility_schema
 
-
-Base.metadata.create_all(bind=engine)
-ensure_sqlite_compatibility_schema()
+if settings.sqlalchemy_database_url.startswith("sqlite"):
+    Base.metadata.create_all(bind=engine)
+    ensure_sqlite_compatibility_schema()
 
 app = FastAPI(title=settings.app_name)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -20,7 +19,6 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
-
 
 @app.get("/health")
 def health() -> dict[str, str]:
