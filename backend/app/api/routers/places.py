@@ -96,7 +96,7 @@ def get_place(place_id: str, db: Session = Depends(get_db)) -> PlaceDetailOut:
 
     tags = [place_tag.tag.name for place_tag in place.tags if place_tag.tag]
     return PlaceDetailOut(
-        id=place.id,
+        id=str(place.id),
         google_place_id=place.google_place_id,
         google_primary_type=place.google_primary_type,
         google_rating=place.google_rating,
