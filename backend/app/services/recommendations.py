@@ -77,7 +77,7 @@ def get_recommendations(db: Session, req: RecommendationRequest) -> list[Recomme
         why = _build_why(breakdown)
 
         item = RecommendationItem(
-            place_id=place.id,
+            place_id=str(place.id),
             name=place.name,
             place_type=place.place_type,
             price_level=place.price_level,
