@@ -20,6 +20,12 @@ from app.models import (
 
 class AppModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+    
+    @field_validator("*", mode="before")
+    @classmethod
+    def coerce_uuids(cls, v):
+        from uuid import UUID
+        return str(v) if isinstance(v, UUID) else v
 
 class TokenResponse(AppModel):
     access_token: str
