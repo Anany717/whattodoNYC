@@ -26,7 +26,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> TokenRespons
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token(user.id)
+    token = create_access_token(str(user.id))
     return TokenResponse(access_token=token)
 
 
@@ -35,7 +35,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    token = create_access_token(user.id)
+    token = create_access_token(str(user.id))
     return TokenResponse(access_token=token)
 
 
